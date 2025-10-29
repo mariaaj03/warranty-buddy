@@ -65,4 +65,14 @@ RSpec.describe Product, type: :model do
       expect(product).to be_valid
     end
   end
+  
+  describe ".for_user" do
+    it "returns only records for the given gmail_uid" do
+      p_a = create(:product, gmail_uid: "A", product_name: "A1")
+      p_b = create(:product, gmail_uid: "B", product_name: "B1")
+
+      expect(Product.for_user("A")).to include(p_a)
+      expect(Product.for_user("A")).not_to include(p_b)
+    end
+  end
 end
