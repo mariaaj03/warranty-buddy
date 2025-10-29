@@ -28,8 +28,6 @@ gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
 
-gem "dotenv-rails", groups: [:development, :test]
-
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 
@@ -68,6 +66,8 @@ group :development, :test do
   gem 'gemini-ai', '~> 4.3.0'
   gem 'nokogiri'
   gem 'mail'
+  gem "dotenv-rails", groups: [:development, :test]
+  gem "icalendar"
 
 end
 

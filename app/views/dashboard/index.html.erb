@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title><%= @title %></title>
+  
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
     h1 { margin: 0 0 .25rem 0; }
@@ -29,6 +30,41 @@
     .status-badge { padding: .15rem .5rem; border-radius: .5rem; font-size: .85rem; }
     .status-active { background: #e6f4ea; color: #1e8e3e; }
     .status-expired { background: #fce8e6; color: #c5221f; }
+    .export-actions {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;              /* space BETWEEN buttons */
+      margin: 2.25rem 0 3rem; /* space ABOVE and BELOW the buttons */
+    }
+    
+    .export-btn {
+      font-size: 1rem;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      transition: transform 0.2s ease, filter 0.2s ease;
+      text-decoration: none; /* for <a> links */
+      display: inline-block;
+    }
+    
+    .export-btn:hover { transform: translateY(-2px); filter: brightness(0.95); }
+    
+    /* CSV: blue */
+    .export-btn--csv { background: #0b57d0; color: #fff; }
+    .export-btn--csv:hover { filter: brightness(0.92); }
+    
+    /* iCal: green */
+   .export-btn--ical {
+  background: #7b1fa2;     
+  color: #fff;
+}
+.export-btn--ical:hover {
+  filter: brightness(0.9);
+}
+    
+
 
     /* Filter bar */
     .filters { margin: 1rem 0 0.5rem; }
@@ -158,5 +194,13 @@
       <% end %>
     </tbody>
   </table>
+  
+  <div class="export-actions" role="group" aria-label="Export actions">
+  <%= link_to "⬇️ Export CSV", export_products_path(format: :csv), class: "export-btn export-btn--csv" %>
+  <%= link_to "📅 Export iCal", calendar_products_path, class: "export-btn export-btn--ical" %>
+</div>
+
+</div>
+
 </body>
 </html>

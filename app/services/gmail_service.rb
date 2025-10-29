@@ -37,7 +37,7 @@ class GmailService
       
       # Focused query per request: "your receipt" is broadly used by many merchants
       receipt_queries = [
-        'in:anywhere "your receipt" newer_than:2y'
+        'in:anywhere "confirmation" newer_than:2y'
       ]
       
       all_messages = []

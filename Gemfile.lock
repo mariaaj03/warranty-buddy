@@ -225,6 +225,12 @@ GEM
       mutex_m
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
+    icalendar (2.12.1)
+      base64
+      ice_cube (~> 0.16)
+      logger
+      ostruct
+    ice_cube (0.17.0)
     image_processing (1.14.0)
       mini_magick (>= 4.9.5, < 6)
       ruby-vips (>= 2.0.17, < 3)
@@ -593,6 +599,7 @@ DEPENDENCIES
   factory_bot_rails
   gemini-ai (~> 4.3.0)
   google-api-client
+  icalendar
   image_processing (~> 1.2)
   importmap-rails
   jbuilder
