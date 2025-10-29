@@ -99,6 +99,77 @@ RSpec.describe "Dashboard", type: :request do
       get "/auth/google_oauth2/callback"
       expect(response).to have_http_status(:ok)
     end
+
+    let(:auth_hash) do
+      OmniAuth::AuthHash.new({
+        uid: '12345',
+        credentials: {
+          token: 'fake_token',
+          refresh_token: 'fake_refresh_token'
+        }
+      })
+    end
+
+    before do
+      OmniAuth.config.test_mode = true
+      OmniAuth.config.mock_auth[:google_oauth2] = auth_hash
+    end
+
+    it "stores Gmail credentials in session" do
+      get "/auth/google_oauth2/callback"
+      expect(session[:gmail_uid]).to eq('12345')
+      expect(session[:gmail_token]).to eq('fake_token')
+      expect(session[:gmail_refresh_token]).to eq('fake_refresh_token')
+      expect(response).to redirect_to(root_path)
+    end
+  end
+
+  describe "GET /auth/failure" do
+    it "handles OAuth failures" do
+      get "/auth/failure"
+      expect(session[:gmail_uid]).to be_nil
+      expect(session[:gmail_token]).to be_nil
+      expect(session[:gmail_refresh_token]).to be_nil
+      expect(response).to redirect_to(root_path)
+      expect(flash[:alert]).to include("Gmail connection was denied")
+    end
+  end
+
+  describe "GET /lookup_warranty_info" do
+    let(:ai_service) { instance_double(AiService) }
+    let(:warranty_info) do
+      {
+        'standard_warranty_months' => 12,
+        'warranty_terms' => 'Limited warranty'
+      }
+    end
+
+    before do
+      allow(AiService).to receive(:new).and_return(ai_service)
+      allow(ai_service).to receive(:lookup_warranty_info).and_return(warranty_info)
+    end
+
+    it "looks up warranty information" do
+      get "/lookup_warranty_info", params: {
+        product_name: "Test Product",
+        merchant: "Test Store"
+      }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to eq(warranty_info)
+    end
+
+    it "handles missing merchant parameter" do
+      get "/lookup_warranty_info", params: { product_name: "Test Product" }, as: :json
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "handles AI service errors" do
+      allow(ai_service).to receive(:lookup_warranty_info).and_return(nil)
+      get "/lookup_warranty_info", params: { product_name: "Test Product" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to be_nil
+    end
   end
 
   describe "POST /disconnect_gmail" do
@@ -306,6 +377,69 @@ RSpec.describe "Dashboard", type: :request do
         }
         expect(response).to have_http_status(:bad_request)
       end
+    end
+  end
+
+  describe "index filtering and sorting" do
+    let!(:product1) { create(:product, product_name: "A Product", merchant: "Amazon", gmail_uid: 'test_user') }
+    let!(:product2) { create(:product, product_name: "B Product", merchant: "Best Buy", gmail_uid: 'test_user') }
+
+    before do
+      allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+      allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+        .with(:@gmail_connected).and_return(true)
+    end
+
+    it "filters by status" do
+      get root_path, params: { status: 'active' }
+      expect(response).to have_http_status(:success)
+      expect(assigns(:warranties)).to be_present
+    end
+
+    it "filters by merchant" do
+      get root_path, params: { merchant: 'Amazon' }
+      expect(response).to have_http_status(:success)
+      expect(assigns(:warranties).first.merchant).to eq('Amazon')
+    end
+
+    it "sorts by different criteria" do
+      ['expiry_date', 'product_name', 'purchase_date', 'merchant'].each do |sort_by|
+        get root_path, params: { sort: sort_by }
+        expect(response).to have_http_status(:success)
+        expect(assigns(:warranties)).to be_present
+      end
+    end
+
+    it "handles Gmail API errors during receipt parsing" do
+      allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+        .with(:@gmail_connected).and_return(true)
+      
+      post "/parse_gmail_receipts"
+      expect(response).to redirect_to(root_path)
+      expect(flash[:alert]).to be_present
+    end
+  end
+
+  describe "warranty management edge cases" do
+    let!(:product) { create(:product, gmail_uid: 'test_user') }
+
+    before do
+      allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+      allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+        .with(:@gmail_connected).and_return(true)
+    end
+
+    it "handles invalid warranty months during update" do
+      patch "/update_warranty/#{product.id}", params: {
+        warranty_months: 'invalid'
+      }
+      expect(response).to have_http_status(:ok)
+      expect(product.reload.warranty_months).to eq(0)
+    end
+
+    it "handles missing parameters during update" do
+      patch "/update_warranty/#{product.id}", params: {}
+      expect(response).to have_http_status(:ok)
     end
   end
 end
