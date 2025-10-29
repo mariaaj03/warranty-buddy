@@ -120,18 +120,41 @@
     .filters-form input[type="text"] { height: 34px; padding: .25rem .5rem; min-width: 12rem; border:1px solid #bbb; border-radius: .35rem; }
     .filters-actions { display:flex; align-items:center; gap:.5rem; }
     .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    
+    /* Action button styles */
+    .action-btn {
+      border: none;
+      padding: 0.4rem 0.6rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+      margin: 0 0.1rem;
+    }
+    .edit-btn {
+      background: #6c757d;
+      color: white;
+    }
+    .edit-btn:hover {
+      background: #5a6268;
+    }
+    .delete-btn {
+      background: #e74c3c;
+      color: white;
+    }
+    .delete-btn:hover {
+      background: #c0392b;
+    }
+    .estimate-indicator {
+      color: #f39c12;
+      font-size: 0.8rem;
+      margin-left: 0.25rem;
+    }
   </style>
 </head>
 <body>
   <h1><%= @title %></h1>
   <div class="muted"><%= @subtitle %></div>
-
-  <% if flash[:notice] %>
-    <div class="flash"><%= flash[:notice] %></div>
-  <% end %>
-  <% if flash[:alert] %>
-    <div class="flash" style="background:#ffdede;"><%= flash[:alert] %></div>
-  <% end %>
 
 <div class="row">
   <% if @gmail_connected %>
@@ -213,19 +236,24 @@
   <table aria-label="warranties">
     <thead>
       <tr>
-        <th>Product</th><th>Merchant</th><th>Purchase Date</th><th>Warranty (months)</th><th>Expires</th><th>Status</th>
+        <th>Product</th><th>Merchant</th><th>Purchase Date</th><th>Warranty (months)</th><th>Expires</th><th>Status</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
       <% if @warranties.empty? %>
-        <tr><td colspan="6">No warranties yet.</td></tr>
+        <tr><td colspan="7">No warranties yet.</td></tr>
       <% else %>
         <% @warranties.each do |w| %>
-          <tr>
+          <tr data-warranty-id="<%= w.id %>">
             <td><%= w.product_name %></td>
             <td><%= w.merchant %></td>
             <td><%= w.purchase_date.strftime("%Y-%m-%d") %></td>
-            <td><%= w.warranty_months %></td>
+            <td>
+              <%= w.warranty_months %>
+              <% if w.warranty_months == 12 && w.source&.include?('parsed') %>
+                <span class="estimate-indicator" title="Estimated warranty length">~</span>
+              <% end %>
+            </td>
             <td><%= w.expiry_date&.strftime("%Y-%m-%d") || '-' %></td>
             <td>
               <% if w.expiry_date && w.expiry_date >= Date.today %>
@@ -233,6 +261,14 @@
               <% else %>
                 <span class="status-badge status-expired">Expired</span>
               <% end %>
+            </td>
+            <td>
+              <button class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit warranty">
+                ✏️
+              </button>
+              <button class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete warranty">
+                🗑️
+              </button>
             </td>
           </tr>
         <% end %>
@@ -277,6 +313,154 @@
 
 
 </div>
+
+<!-- Edit Modal -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 0.5rem; min-width: 400px; max-width: 600px;">
+    <h3 style="margin-top: 0;">Edit Warranty</h3>
+    <form id="editForm">
+      <input type="hidden" id="editWarrantyId" name="id">
+      <div style="margin-bottom: 1rem;">
+        <label for="editProductName" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Product Name</label>
+        <input type="text" id="editProductName" name="product_name" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label for="editMerchant" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Merchant</label>
+        <input type="text" id="editMerchant" name="merchant" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label for="editPurchaseDate" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Purchase Date</label>
+        <input type="date" id="editPurchaseDate" name="purchase_date" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label for="editWarrantyMonths" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Warranty Length (months)</label>
+        <input type="number" id="editWarrantyMonths" name="warranty_months" min="0" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
+      </div>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Handle action button clicks
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('delete-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const warrantyId = e.target.getAttribute('data-warranty-id');
+      const row = e.target.closest('tr');
+      
+      if (warrantyId && row) {
+        deleteWarranty(warrantyId, row);
+      }
+    } else if (e.target.classList.contains('edit-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const warrantyId = e.target.getAttribute('data-warranty-id');
+      const row = e.target.closest('tr');
+      
+      if (warrantyId && row) {
+        editWarranty(warrantyId, row);
+      }
+    }
+  });
+  
+  function editWarranty(warrantyId, row) {
+    const cells = row.querySelectorAll('td');
+    const productName = cells[0].textContent.trim();
+    const merchant = cells[1].textContent.trim();
+    const purchaseDate = cells[2].textContent.trim();
+    const warrantyMonths = cells[3].textContent.replace('~', '').trim();
+    
+    document.getElementById('editWarrantyId').value = warrantyId;
+    document.getElementById('editProductName').value = productName;
+    document.getElementById('editMerchant').value = merchant;
+    document.getElementById('editPurchaseDate').value = purchaseDate;
+    document.getElementById('editWarrantyMonths').value = warrantyMonths;
+    
+    document.getElementById('editModal').style.display = 'block';
+  }
+  
+  function deleteWarranty(warrantyId, row) {
+    const deleteUrl = `/warranties/${warrantyId}`;
+    
+    fetch(deleteUrl, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'Content-Type': 'application/json'
+      },
+      credentials: 'same-origin'
+    })
+    .then(response => {
+      row.style.transition = 'opacity 0.3s ease';
+      row.style.opacity = '0';
+      setTimeout(() => {
+        row.remove();
+        const tbody = document.querySelector('table tbody');
+        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8">No warranties yet.</td></tr>';
+        }
+      }, 300);
+    })
+    .catch(error => {
+      console.error('Error deleting warranty:', error);
+    });
+  }
+  
+  document.getElementById('editForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const warrantyId = formData.get('id');
+    const updateUrl = `/warranties/${warrantyId}`;
+    
+    const updateData = {
+      product_name: formData.get('product_name'),
+      merchant: formData.get('merchant'),
+      purchase_date: formData.get('purchase_date'),
+      warranty_months: formData.get('warranty_months')
+    };
+    
+    fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'Content-Type': 'application/json'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(updateData)
+    })
+    .then(response => {
+      if (response.ok) {
+        document.getElementById('editModal').style.display = 'none';
+        location.reload();
+      } else {
+        console.error('Failed to update warranty');
+      }
+    })
+    .catch(error => {
+      console.error('Error updating warranty:', error);
+    });
+  });
+  
+  document.getElementById('cancelEdit').addEventListener('click', () => {
+    document.getElementById('editModal').style.display = 'none';
+  });
+  
+  document.getElementById('editModal').addEventListener('click', (e) => {
+    if (e.target.id === 'editModal') {
+      document.getElementById('editModal').style.display = 'none';
+    }
+  });
+})();
+</script>
 
 </body>
 </html>

@@ -6,23 +6,19 @@ class DashboardController < ApplicationController
     @title = "Warranty Buddy  -  Iteration 1"
     @subtitle = "Your Digital Memory for Every Purchase"
     
-    # Handle search and filtering
     @search_term = params[:search]
     @status_filter = params[:status]
     @merchant_filter = params[:merchant]
     @sort_by = params[:sort] || 'expiry_date'
     
-    # Only show warranties for the current user
     if @gmail_connected && session[:gmail_uid]
       @warranties = Product.for_user(session[:gmail_uid])
     else
-      @warranties = Product.none # Show no warranties if not connected
+      @warranties = Product.none
     end
     
-    # Apply search
     @warranties = @warranties.search(@search_term) if @search_term.present?
     
-    # Apply status filter
     case @status_filter
     when 'active'
       @warranties = @warranties.active
@@ -32,13 +28,9 @@ class DashboardController < ApplicationController
       @warranties = @warranties.expiring_soon
     end
     
-    # Apply merchant filter
     @warranties = @warranties.by_merchant(@merchant_filter) if @merchant_filter.present?
-    
-    # Get unique merchants for filter dropdown (only for current user) - before ordering
     @merchants = @warranties.distinct.pluck(:merchant).compact.sort
     
-    # Apply sorting
     case @sort_by
     when 'expiry_date'
       @warranties = @warranties.order(:purchase_date, :warranty_months)
@@ -50,12 +42,9 @@ class DashboardController < ApplicationController
       @warranties = @warranties.order(:merchant)
     end
     
-    # For iteration 1, we are not fetching Gmail messages yet
     @gmail_messages = []
   end
 
-
-  # Called by OmniAuth callback
   def google_auth
     auth_info = request.env['omniauth.auth']
 
@@ -63,8 +52,15 @@ class DashboardController < ApplicationController
     session[:gmail_token] = auth_info.credentials.token
     session[:gmail_refresh_token] = auth_info.credentials.refresh_token
 
-    flash[:notice] = "Gmail connected successfully!"
     redirect_to root_path
+  end
+
+  def oauth_failure
+    session.delete(:gmail_uid)
+    session.delete(:gmail_token)
+    session.delete(:gmail_refresh_token)
+    
+    redirect_to root_path, alert: "Gmail connection was denied or failed"
   end
 
   def upload
@@ -100,7 +96,7 @@ class DashboardController < ApplicationController
       gmail_uid: session[:gmail_uid]
     )
 
-    redirect_to root_path, notice: "Uploaded #{params[:product]}"
+    redirect_to root_path
   end
 
   def api_warranties
@@ -126,7 +122,6 @@ class DashboardController < ApplicationController
   end
 
   def reset
-    # Clear session but keep warranties - they will reappear when user logs back in
     session[:gmail_uid] = nil
     session[:gmail_token] = nil
     session[:gmail_refresh_token] = nil
@@ -134,15 +129,14 @@ class DashboardController < ApplicationController
   end
 
   def disconnect_gmail
-    # Clear session but keep warranties - they will reappear when user logs back in
     session[:gmail_uid] = nil
     session[:gmail_token] = nil
     session[:gmail_refresh_token] = nil
-    redirect_to root_path, notice: "Gmail disconnected. Your warranties are saved and will reappear when you reconnect."
+    redirect_to root_path
   end
 
   def parse_gmail_receipts
-    return redirect_to root_path, alert: "Gmail not connected" unless @gmail_connected
+    return redirect_to root_path unless @gmail_connected
 
     begin
       gmail_service = GmailService.new(session[:gmail_token])
@@ -152,9 +146,9 @@ class DashboardController < ApplicationController
       parsed_receipts.each do |receipt_data|
         next if receipt_data[:product_name].blank?
         
-        # Check if product already exists (by email ID or similar product)
         existing_product = Product.find_by(raw_email_id: receipt_data[:raw_email_id])
         next if existing_product
+        next if receipt_data[:product_name].blank? || receipt_data[:purchase_date].blank?
 
         Product.create!(
           product_name: receipt_data[:product_name],
@@ -166,25 +160,20 @@ class DashboardController < ApplicationController
           return_deadline: receipt_data[:return_deadline],
           source: receipt_data[:source],
           raw_email_id: receipt_data[:raw_email_id],
-          confidence: receipt_data[:confidence],
           gmail_uid: session[:gmail_uid]
         )
         created_count += 1
       end
 
-      if created_count == 0
-        redirect_to root_path, notice: "No new receipts found in your Gmail. Using Google Gemini AI for intelligent receipt parsing."
-      else
-        redirect_to root_path, notice: "Successfully parsed #{created_count} receipts from Gmail using Google Gemini AI"
-      end
+      redirect_to root_path
     rescue => e
       Rails.logger.error "Gmail parsing failed: #{e.message}"
       message = e.message.to_s
       if message.include?("PERMISSION_DENIED") || message.include?("SERVICE_DISABLED") || message.include?("accessNotConfigured")
         alert_msg = "Gmail API is disabled for your Google Cloud project. Please enable it here (must be owner): https://console.cloud.google.com/apis/library/gmail.googleapis.com?project=#{Rails.application.credentials.dig(:google, :project_id) || 'YOUR_PROJECT_ID'}"
-        redirect_to root_path, alert: alert_msg
+        redirect_to root_path
       else
-        redirect_to root_path, alert: "Failed to parse Gmail receipts: #{e.message}"
+        redirect_to root_path
       end
     end
   end
@@ -231,6 +220,52 @@ class DashboardController < ApplicationController
 
     respond_to do |format|
       format.json { render json: warranty_info }
+    end
+  end
+
+  def delete_warranty
+    unless @gmail_connected && session[:gmail_uid]
+      head :unauthorized
+      return
+    end
+
+    product = Product.for_user(session[:gmail_uid]).find_by(id: params[:id])
+    if product
+      product.destroy
+      head :ok
+    else
+      head :not_found
+    end
+  end
+
+  def update_warranty
+    unless @gmail_connected && session[:gmail_uid]
+      head :unauthorized
+      return
+    end
+
+    product = Product.for_user(session[:gmail_uid]).find_by(id: params[:id])
+    if product
+      purchase_date = nil
+      if params[:purchase_date].present?
+        begin
+          purchase_date = Date.parse(params[:purchase_date])
+        rescue ArgumentError => e
+          Rails.logger.error "Date parsing error: #{e.message}, date: #{params[:purchase_date]}"
+          head :bad_request
+          return
+        end
+      end
+      
+      product.update!(
+        product_name: params[:product_name],
+        merchant: params[:merchant],
+        purchase_date: purchase_date,
+        warranty_months: params[:warranty_months].to_i
+      )
+      head :ok
+    else
+      head :not_found
     end
   end
 

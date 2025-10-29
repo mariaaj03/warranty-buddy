@@ -151,6 +151,163 @@ RSpec.describe "Dashboard", type: :request do
       expect(response).to have_http_status(:ok)
     end
   end
+
+  describe "POST /parse_gmail_receipts" do
+    let(:gmail_service) { instance_double(GmailService) }
+    
+    context "when Gmail is connected" do
+      before do
+        allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+        allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+          .with(:@gmail_connected).and_return(true)
+        allow(GmailService).to receive(:new).and_return(gmail_service)
+      end
+
+      it "processes receipts successfully" do
+        allow(gmail_service).to receive(:parse_receipt_emails).and_return([
+          {
+            product_name: "Test Product",
+            merchant: "Test Store",
+            purchase_date: Date.today,
+            warranty_months: 12
+          }
+        ])
+
+        post "/parse_gmail_receipts"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:notice]).to include("Successfully processed")
+      end
+
+      it "handles empty receipt list" do
+        allow(gmail_service).to receive(:parse_receipt_emails).and_return([])
+        post "/parse_gmail_receipts"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:notice]).to include("No new receipts")
+      end
+
+      it "handles Gmail API errors" do
+        allow(gmail_service).to receive(:parse_receipt_emails).and_raise(StandardError, "API Error")
+        post "/parse_gmail_receipts"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:alert]).to include("Error processing receipts")
+      end
+    end
+
+    context "when Gmail is not connected" do
+      it "redirects with error" do
+        post "/parse_gmail_receipts"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:alert]).to include("Please connect your Gmail")
+      end
+    end
+  end
+
+  describe "POST /check_warranty_eligibility" do
+    let!(:product) { create(:product, gmail_uid: 'test_user') }
+    let(:ai_service) { instance_double(AiService) }
+
+    before do
+      allow(AiService).to receive(:new).and_return(ai_service)
+    end
+
+    context "when Gmail is connected" do
+      before do
+        allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+        allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+          .with(:@gmail_connected).and_return(true)
+      end
+
+      it "checks eligibility successfully" do
+        allow(ai_service).to receive(:check_warranty_eligibility).and_return({
+          "is_covered" => true,
+          "reasoning" => "Within warranty period"
+        })
+
+        post "/check_warranty_eligibility", params: {
+          product_id: product.id,
+          issue_description: "Product stopped working"
+        }
+
+        expect(response).to redirect_to(root_path)
+        expect(flash[:notice]).to include("Warranty status")
+      end
+
+      it "handles missing issue description" do
+        post "/check_warranty_eligibility", params: { product_id: product.id }
+        expect(response).to have_http_status(:bad_request)
+        expect(response.body).to include("Issue description required")
+      end
+
+      it "handles invalid product ID" do
+        post "/check_warranty_eligibility", params: {
+          product_id: 0,
+          issue_description: "Test issue"
+        }
+        expect(response).to have_http_status(:not_found)
+      end
+    end
+  end
+
+  describe "DELETE /delete_warranty" do
+    let!(:product) { create(:product, gmail_uid: 'test_user') }
+
+    context "when Gmail is connected" do
+      before do
+        allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+        allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+          .with(:@gmail_connected).and_return(true)
+      end
+
+      it "deletes the warranty" do
+        expect {
+          delete "/delete_warranty/#{product.id}"
+        }.to change(Product, :count).by(-1)
+        expect(response).to redirect_to(root_path)
+        expect(flash[:notice]).to include("Warranty deleted")
+      end
+
+      it "handles non-existent warranty" do
+        delete "/delete_warranty/0"
+        expect(response).to have_http_status(:not_found)
+      end
+    end
+
+    context "when Gmail is not connected" do
+      it "redirects with error" do
+        delete "/delete_warranty/#{product.id}"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:alert]).to include("Please connect your Gmail")
+      end
+    end
+  end
+
+  describe "PATCH /update_warranty" do
+    let!(:product) { create(:product, gmail_uid: 'test_user') }
+
+    context "when Gmail is connected" do
+      before do
+        allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
+        allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
+          .with(:@gmail_connected).and_return(true)
+      end
+
+      it "updates the warranty successfully" do
+        patch "/update_warranty/#{product.id}", params: {
+          product_name: "Updated Product",
+          purchase_date: "2025-10-29"
+        }
+        expect(response).to have_http_status(:success)
+        expect(product.reload.product_name).to eq("Updated Product")
+      end
+
+      it "handles invalid dates" do
+        patch "/update_warranty/#{product.id}", params: {
+          purchase_date: "invalid-date"
+        }
+        expect(response).to have_http_status(:bad_request)
+      end
+    end
+  end
 end
 
 
