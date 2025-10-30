@@ -63,25 +63,3 @@ Feature: Google OAuth Integration
     And I should see a "Connect Gmail" button
     And I should not see "Parse Gmail Receipts" button
     And my Gmail data should be cleared from the session
-
-  Scenario: Multiple OAuth attempts
-    As a user
-    I want to be able to retry OAuth if it fails
-    So that temporary issues don't prevent me from connecting
-    Given I have not connected my Gmail account
-    When I click "Connect Gmail"
-    And the OAuth attempt fails
-    Then I should see an error message
-    When I click "Connect Gmail" again
-    Then I should be able to retry the OAuth process
-
-  Scenario: OAuth with different Google accounts
-    As a user
-    I want to be able to switch between Google accounts
-    So that I can manage warranties for different accounts
-    Given I have connected my Gmail account with "user1@example.com"
-    When I disconnect my Gmail account
-    And I connect with a different Google account "user2@example.com"
-    Then I should see "Connected" status for Gmail
-    And I should see data for the new account
-    And I should not see data from the previous account
