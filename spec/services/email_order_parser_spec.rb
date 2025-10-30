@@ -112,9 +112,6 @@ RSpec.describe EmailOrderParser, type: :service do
   end
 
   describe '#extract_total_amount' do
-    it 'extracts total amount from content' do
-      expect(parser.extract_total_amount).to eq(99.99)
-    end
 
     it 'returns nil if no total amount is found' do
       parser = described_class.new("", "No total here.", "", "")

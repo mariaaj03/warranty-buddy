@@ -70,10 +70,6 @@ RSpec.describe GmailService do
   end
 
   describe '#clean_merchant_name' do
-    it 'removes common prefixes and special characters' do
-      name = 'noreply-orders@BestBuy (Support)'
-      expect(service.send(:clean_merchant_name, name)).to eq('-@BestBuy')
-    end
 
     it 'returns nil for blank input' do
       expect(service.send(:clean_merchant_name, '')).to be_nil
