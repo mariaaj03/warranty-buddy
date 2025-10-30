@@ -211,7 +211,7 @@ Feature: Warranty Buddy Dashboard
     I want to filter warranties by status
     So I can focus on what's currently covered
     Given I have connected my Gmail account
-    And I have added a warranty for "Active Product" with purchase date "2024-01-01" and warranty "12" months
+    And I have added a warranty for "Active Product" with purchase date "2025-01-01" and warranty "12" months
     And I have added a warranty for "Expired Product" with purchase date "2020-01-01" and warranty "12" months
     When I visit the homepage
     And I select "Active" from status filter
@@ -225,7 +225,7 @@ Feature: Warranty Buddy Dashboard
     I want to see expired warranties
     So I know what's no longer covered
     Given I have connected my Gmail account
-    And I have added a warranty for "Active Product" with purchase date "2024-01-01" and warranty "12" months
+    And I have added a warranty for "Active Product" with purchase date "2025-01-01" and warranty "12" months
     And I have added a warranty for "Expired Product" with purchase date "2020-01-01" and warranty "12" months
     When I visit the homepage
     And I select "Expired" from status filter

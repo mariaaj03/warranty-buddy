@@ -157,7 +157,8 @@ When("I change {string} to {string}") do |field, value|
   elsif field == "Merchant"
     fill_in "editMerchant", with: value
   elsif field == "Purchase Date"
-    fill_in "editPurchaseDate", with: value
+    # Use JavaScript to set date field value properly
+    page.execute_script("document.getElementById('editPurchaseDate').value = '#{value}'")
   elsif field == "Warranty Length"
     fill_in "editWarrantyMonths", with: value
   end
@@ -355,6 +356,8 @@ When("I fill in search field with {string}") do |search_term|
 end
 
 When("I select {string} from status filter") do |status|
+  # The parameter is the display text, but we need to select by the display text
+  # Capybara's select will match the option text, not the value
   select status, from: "filter-status"
 end
 
