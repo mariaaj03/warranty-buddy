@@ -7,6 +7,7 @@ RSpec.describe "dashboard/index", type: :view do
     assign(:warranties, [])
     assign(:gmail_connected, false)
     assign(:gmail_messages, [])
+    assign(:merchants, [])
   end
 
   it "displays the title and subtitle" do
