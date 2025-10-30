@@ -1,20 +1,24 @@
 class AiService
-  def initialize
-    begin
-      require "gemini-ai"
-      @client = Gemini.new(
-        credentials: {
-          service: "generative-language-api",
-          api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
-        },
-        options: { model: "gemini-2.0-flash", server_sent_events: false }
-      )
-    rescue LoadError => e
-      Rails.logger.error "Gemini AI gem not available: #{e.message}"
-      @client = nil
-    rescue => e
-      Rails.logger.error "Gemini AI client initialization failed: #{e.message}"
-      @client = nil
+  def initialize(client = nil)
+    if client
+      @client = client
+    else
+      begin
+        require "gemini-ai"
+        @client = Gemini.new(
+          credentials: {
+            service: "generative-language-api",
+            api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
+          },
+          options: { model: "gemini-2.0-flash", server_sent_events: false }
+        )
+      rescue LoadError => e
+        Rails.logger.error "Gemini AI gem not available: #{e.message}"
+        @client = nil
+      rescue => e
+        Rails.logger.error "Gemini AI client initialization failed: #{e.message}"
+        @client = nil
+      end
     end
   end
 

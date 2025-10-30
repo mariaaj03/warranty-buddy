@@ -145,7 +145,7 @@ class GmailService
 
     cleaned = name.strip
     cleaned = cleaned.gsub(/\b(?:noreply|no-reply|support|orders?)\b/i, "")
-    cleaned = cleaned.gsub(/[\(\)\[\]<>]/, "")
+    cleaned = cleaned.gsub(/[\(\)\[\]<>@\-\.]+/, " ")  # Remove special characters
     cleaned = cleaned.gsub(/\s+/, " ")
     cleaned.strip
   end
@@ -156,9 +156,11 @@ class GmailService
     # Try to extract product name from subject
     patterns = [
       /receipt for\s+(.+)/i,
-      /order(?:\s+for)?\s+(.+)/i,
+      /order\s+for\s+(.+)/i,
+      /order\s+(.+)/i,
       /your order of\s+(.+)/i,
-      /purchase(?:\s+of)?\s+(.+)/i
+      /purchase\s+of\s+(.+)/i,
+      /purchase\s+(.+)/i
     ]
 
     patterns.each do |pattern|

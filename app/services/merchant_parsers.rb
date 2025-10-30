@@ -112,10 +112,19 @@ class MerchantParsers
       cleaned = price_string.gsub(/[^\d\.,]/, "")
       return nil if cleaned.blank?
 
-      if cleaned.include?(",") && cleaned.include?(".")
+      # Handle different decimal/thousands separator formats
+      if cleaned.match(/^\d{1,3}(\,\d{3})+\.\d{2}$/)
+        # Format: 1,234.56 (US format with thousands separator)
         cleaned = cleaned.gsub(",", "")
-      elsif cleaned.include?(",") && !cleaned.include?(".")
+      elsif cleaned.match(/^\d{1,3}(\.\d{3})+\,\d{2}$/)
+        # Format: 1.234,56 (European format)
+        cleaned = cleaned.gsub(".", "").gsub(",", ".")
+      elsif cleaned.count(",") == 1 && cleaned.count(".") == 0
+        # Format: 123,45 (European decimal)
         cleaned = cleaned.gsub(",", ".")
+      elsif cleaned.count(".") > 1
+        # Multiple dots, assume thousands separator
+        cleaned = cleaned.gsub(".", "")
       end
 
       cleaned.to_f
@@ -227,10 +236,19 @@ class MerchantParsers
       cleaned = price_string.gsub(/[^\d\.,]/, "")
       return nil if cleaned.blank?
 
-      if cleaned.include?(",") && cleaned.include?(".")
+      # Handle different decimal/thousands separator formats
+      if cleaned.match(/^\d{1,3}(\,\d{3})+\.\d{2}$/)
+        # Format: 1,234.56 (US format with thousands separator)
         cleaned = cleaned.gsub(",", "")
-      elsif cleaned.include?(",") && !cleaned.include?(".")
+      elsif cleaned.match(/^\d{1,3}(\.\d{3})+\,\d{2}$/)
+        # Format: 1.234,56 (European format)
+        cleaned = cleaned.gsub(".", "").gsub(",", ".")
+      elsif cleaned.count(",") == 1 && cleaned.count(".") == 0
+        # Format: 123,45 (European decimal)
         cleaned = cleaned.gsub(",", ".")
+      elsif cleaned.count(".") > 1
+        # Multiple dots, assume thousands separator
+        cleaned = cleaned.gsub(".", "")
       end
 
       cleaned.to_f

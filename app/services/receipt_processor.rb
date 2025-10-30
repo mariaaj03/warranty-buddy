@@ -95,12 +95,25 @@ class ReceiptProcessor
   end
 
   def extract_merchant_from_receipt(text)
-    # Look for store names in the text
-    common_merchants = %w[Amazon Best\s+Buy Walmart Target Costco Newegg B&H\s+Photo Apple Microsoft Home\s+Depot Lowes]
+    # Look for store names in the text - using regex patterns
+    common_merchants = [
+      "Amazon",
+      "Best\\s+Buy",
+      "Walmart",
+      "Target",
+      "Costco",
+      "Newegg",
+      "B&H\\s+Photo",
+      "Apple",
+      "Microsoft",
+      "Home\\s+Depot",
+      "Lowes"
+    ]
 
-    common_merchants.each do |merchant|
-      if text.match?(/#{merchant}/i)
-        return merchant.gsub(/\s+/, " ")
+    common_merchants.each do |merchant_pattern|
+      if text.match?(/#{merchant_pattern}/i)
+        # Return the cleaned up name without regex escapes
+        return merchant_pattern.gsub(/\\s\+/, " ")
       end
     end
 
@@ -215,13 +228,19 @@ class ReceiptProcessor
     cleaned = price_string.gsub(/[^\d\.,]/, "")
     return nil if cleaned.blank?
 
-    # Handle different decimal separators
-    if cleaned.include?(",") && cleaned.include?(".")
-      # Assume comma is thousands separator
+    # Handle different decimal/thousands separator formats
+    if cleaned.match(/^\d{1,3}(\,\d{3})+\.\d{2}$/)
+      # Format: 1,234.56 (US format with thousands separator)
       cleaned = cleaned.gsub(",", "")
-    elsif cleaned.include?(",") && !cleaned.include?(".")
-      # Assume comma is decimal separator
+    elsif cleaned.match(/^\d{1,3}(\.\d{3})+\,\d{2}$/)
+      # Format: 1.234,56 (European format)
+      cleaned = cleaned.gsub(".", "").gsub(",", ".")
+    elsif cleaned.count(",") == 1 && cleaned.count(".") == 0
+      # Format: 123,45 (European decimal)
       cleaned = cleaned.gsub(",", ".")
+    elsif cleaned.count(".") > 1
+      # Multiple dots, assume thousands separator
+      cleaned = cleaned.gsub(".", "")
     end
 
     cleaned.to_f
