@@ -4,8 +4,10 @@ Your Digital Memory for Every Purchase
 
 ## Team Members
 
-- **Maria** - [UNI]
-- **Gilad Bregman** - [UNI]
+- **Maria Aswad Janoo** - [maj2198]
+- **Gilad Bregman** - [gb2862]
+- **Danielle Reich** - [dr3368]
+- **Kalei Ragland** - [kar2247]
 
 ## Project Description
 
