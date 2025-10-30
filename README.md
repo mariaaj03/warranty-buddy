@@ -71,10 +71,9 @@ Add the following structure:
 
 ```yaml
 google:
-  client_id: YOUR_GOOGLE_CLIENT_ID
-  client_secret: YOUR_GOOGLE_CLIENT_SECRET
-  redirect_uri: http://localhost:3000/auth/google_oauth2/callback
-  gemini_api_key: YOUR_GEMINI_API_KEY
+  GOOGLE_CLIENT_ID=785809032235-786d4mbrv3l9o3ac17khlsfkfc1eofgr.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET=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
+  GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:3000/auth/google_oauth2/callback
 ```
 
 **To obtain credentials:**
