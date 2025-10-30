@@ -1,3 +1,5 @@
+require "omniauth"
+
 OmniAuth.config.allowed_request_methods = %i[post get]
 
 client_id     = ENV["GOOGLE_CLIENT_ID"]     || Rails.application.credentials.dig(:google, :client_id)
