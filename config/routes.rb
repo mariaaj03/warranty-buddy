@@ -33,4 +33,5 @@ Rails.application.routes.draw do
   get "/lookup_warranty_info", to: "dashboard#lookup_warranty_info"
   delete "/warranties/:id", to: "dashboard#delete_warranty", as: :delete_warranty
   patch "/warranties/:id", to: "dashboard#update_warranty", as: :update_warranty
+  patch '/update_warranty/:id', to: 'dashboard#update_warranty'
 end

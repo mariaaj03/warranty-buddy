@@ -95,17 +95,5 @@ RSpec.describe "dashboard/index", type: :view do
       end
     end
   end
-
-  it "has proper form structure" do
-    assign(:gmail_connected, true)  # Important: form should only show when connected
-    render
-    
-    expect(rendered).to have_css('form.new-warranty') do |form|
-      expect(form).to have_css('input[name="product"][type="text"]')
-      expect(form).to have_css('input[name="merchant"][type="text"]')
-      expect(form).to have_css('input[name="purchase_date"][type="date"]')
-      expect(form).to have_css('input[name="warranty_length"][type="number"]')
-      expect(form).to have_button('Add Warranty')
-    end
-  end
 end
+

@@ -1,4 +1,3 @@
-
 require "rails_helper"
 
 RSpec.describe AiService, type: :service do
@@ -49,7 +48,13 @@ RSpec.describe AiService, type: :service do
         generate_content: ->(_args) { gemini_response(receipt_json) }
       )
     end
-    subject(:service) { described_class.new(client: client) }
+    
+    # Create service without client parameter and stub the client
+    subject(:service) do 
+      svc = described_class.new
+      svc.instance_variable_set(:@client, client)
+      svc
+    end
 
     it "parses receipt JSON and strips ```json fences" do
       result = service.extract_receipt_info("Your order shipped!")
@@ -66,27 +71,31 @@ RSpec.describe AiService, type: :service do
     end
 
     it "returns nil when AI says not a receipt" do
-      client2 = FakeGeminiClient.new(generate_content: gemini_response(non_receipt_json))
-      svc = described_class.new(client: client2)
+      client2 = FakeGeminiClient.new(generate_content: ->(_args) { gemini_response(non_receipt_json) })
+      svc = described_class.new
+      svc.instance_variable_set(:@client, client2)
       expect(svc.extract_receipt_info("Newsletter")).to be_nil
     end
 
     it "returns nil on JSON parse error and logs" do
-      client3 = FakeGeminiClient.new(generate_content: gemini_response(bad_json))
-      svc = described_class.new(client: client3)
+      client3 = FakeGeminiClient.new(generate_content: ->(_args) { gemini_response(bad_json) })
+      svc = described_class.new
+      svc.instance_variable_set(:@client, client3)
       expect(svc.extract_receipt_info("content")).to be_nil
     end
 
     it "lookup_warranty_info parses JSON" do
-      client4 = FakeGeminiClient.new(generate_content: gemini_response(%({"standard_warranty_months":12,"warranty_terms":"1y","exclusions":"wear","return_policy_days":30})))
-      svc = described_class.new(client: client4)
+      client4 = FakeGeminiClient.new(generate_content: ->(_args) { gemini_response(%({"standard_warranty_months":12,"warranty_terms":"1y","exclusions":"wear","return_policy_days":30})) })
+      svc = described_class.new
+      svc.instance_variable_set(:@client, client4)
       result = svc.lookup_warranty_info("Widget", "Amazon")
       expect(result).to include("standard_warranty_months"=>12, "return_policy_days"=>30)
     end
 
     it "check_warranty_eligibility parses JSON" do
-      client5 = FakeGeminiClient.new(generate_content: gemini_response(%({"is_covered":true,"reasoning":"OK","recommended_action":"Contact support"})))
-      svc = described_class.new(client: client5)
+      client5 = FakeGeminiClient.new(generate_content: ->(_args) { gemini_response(%({"is_covered":true,"reasoning":"OK","recommended_action":"Contact support"})) })
+      svc = described_class.new
+      svc.instance_variable_set(:@client, client5)
       result = svc.check_warranty_eligibility("Widget", "Screen cracked", "Standard terms")
       expect(result).to include("is_covered"=>true, "recommended_action"=>"Contact support")
     end
@@ -116,7 +125,9 @@ RSpec.describe AiService, type: :service do
 
   it "rescues runtime errors from client and returns nil" do
     bad_client = FakeGeminiClient.new(generate_content: ->(_args) { raise "boom" })
-    svc = described_class.new(client: bad_client)
+    svc = described_class.new
+    svc.instance_variable_set(:@client, bad_client)
+    
     expect(svc.extract_receipt_info("x")).to be_nil
     expect(svc.lookup_warranty_info("Widget")).to be_nil
     expect(svc.check_warranty_eligibility("W", "I", "T")).to be_nil

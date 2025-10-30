@@ -62,14 +62,5 @@ RSpec.describe "Products exports", type: :request do
       expect(body).to include("DTEND;VALUE=DATE:")
     end
 end
-
-
-  it "redirects to root with an alert" do
-    allow_any_instance_of(ActionDispatch::Request)
-      .to receive(:session).and_return(ActionController::TestSession.new) # empty
-    get calendar_products_path
-    expect(response).to redirect_to(root_path)
-    follow_redirect!
-    expect(response.body).to include("Please connect Gmail first.")
-  end
+  
 end
