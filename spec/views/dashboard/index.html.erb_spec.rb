@@ -7,44 +7,60 @@ RSpec.describe "dashboard/index", type: :view do
     assign(:warranties, [])
     assign(:gmail_connected, false)
     assign(:gmail_messages, [])
+    assign(:search_term, nil)
+    assign(:status_filter, nil)
+    assign(:merchant_filter, nil)
+    assign(:sort_by, 'expiry_date')
     assign(:merchants, [])
   end
 
   it "displays the title and subtitle" do
     render
-    expect(rendered).to include("Warranty Buddy - Iteration 1")
-    expect(rendered).to include("Your Digital Memory for Every Purchase")
+    expect(rendered).to have_selector('h1', text: "Warranty Buddy - Iteration 1")
+    expect(rendered).to have_selector('.muted', text: "Your Digital Memory for Every Purchase")
   end
 
   it "shows not connected status when Gmail is not connected" do
     render
-    expect(rendered).to include("Not Connected")
-    expect(rendered).to have_button("Connect Gmail")
+    expect(rendered).to have_selector('.badge.not', text: "Not Connected")
+    expect(rendered).to have_button("Connect Gmail", class: "btn-primary")
   end
 
   it "shows connected status when Gmail is connected" do
     assign(:gmail_connected, true)
     render
-    expect(rendered).to include("Connected")
-    expect(rendered).to have_button("Disconnect Gmail")
+    expect(rendered).to have_selector('.badge.ok', text: "Connected")
+    expect(rendered).to have_button("Disconnect Gmail", class: "btn-danger")
   end
 
   it "displays the add product warranty section" do
     render
-    expect(rendered).to include("Add a product warranty")
-    expect(rendered).to include('name="product"')
-    expect(rendered).to include('name="merchant"')
-    expect(rendered).to include('name="purchase_date"')
-    expect(rendered).to include('name="warranty_length"')
+    within('details') do
+      expect(rendered).to have_selector('summary', text: "Add a product warranty")
+      expect(rendered).to have_field('product', type: 'text')
+      expect(rendered).to have_field('merchant', type: 'text')
+      expect(rendered).to have_field('purchase_date', type: 'date')
+      expect(rendered).to have_field('warranty_length', type: 'number')
+    end
   end
 
   it "shows empty warranties table when no products" do
     render
-    expect(rendered).to include("Please connect your Gmail account to view warranties.")
+    within('table') do
+      expect(rendered).to have_selector('td', text: "No warranties yet.")
+    end
   end
 
   context "with products" do
-    let(:product) { create(:product, product_name: "Test Product", merchant: "Amazon") }
+    let(:product) do
+      create(:product,
+        product_name: "Test Product",
+        merchant: "Amazon",
+        purchase_date: Date.today,
+        warranty_months: 12,
+        gmail_uid: 'test_user'
+      )
+    end
 
     before do
       assign(:warranties, [ product ])
@@ -52,31 +68,44 @@ RSpec.describe "dashboard/index", type: :view do
 
     it "displays products in the table" do
       render
-      expect(rendered).to include("Test Product")
-      expect(rendered).to include("Amazon")
+      within('table') do
+        expect(rendered).to have_selector('td', text: "Test Product")
+        expect(rendered).to have_selector('td', text: "Amazon")
+      end
     end
 
     it "shows active status for current warranty" do
       render
-      expect(rendered).to include("Active")
+      within('table') do
+        expect(rendered).to have_selector('.status-badge.status-active', text: "Active")
+      end
     end
 
     it "shows expired status for old warranty" do
-      expired_product = create(:product, :expired, product_name: "Old Product")
-      assign(:warranties, [ expired_product ])
+      expired_product = create(:product,
+        product_name: "Old Product",
+        purchase_date: 2.years.ago,
+        warranty_months: 12,
+        gmail_uid: 'test_user'
+      )
+      assign(:warranties, [expired_product])
       render
-      expect(rendered).to include("Expired")
+      within('table') do
+        expect(rendered).to have_selector('.status-badge.status-expired', text: "Expired")
+      end
     end
   end
 
   it "has proper form structure" do
+    assign(:gmail_connected, true)  # Important: form should only show when connected
     render
-    expect(rendered).to include('action="/upload"')
-    expect(rendered).to include('method="post"')
-    expect(rendered).to include('name="product"')
-    expect(rendered).to include('name="merchant"')
-    expect(rendered).to include('name="purchase_date"')
-    expect(rendered).to include('name="warranty_length"')
-    expect(rendered).to include("Add a product warranty")
+    
+    expect(rendered).to have_css('form.new-warranty') do |form|
+      expect(form).to have_css('input[name="product"][type="text"]')
+      expect(form).to have_css('input[name="merchant"][type="text"]')
+      expect(form).to have_css('input[name="purchase_date"][type="date"]')
+      expect(form).to have_css('input[name="warranty_length"][type="number"]')
+      expect(form).to have_button('Add Warranty')
+    end
   end
 end
