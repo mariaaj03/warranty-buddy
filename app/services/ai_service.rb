@@ -2,13 +2,27 @@ class AiService
   def initialize
     begin
       require 'gemini-ai'
+      
+      # Try environment variable first, then fall back to credentials
+      api_key = ENV['GEMINI_API_KEY'] || Rails.application.credentials.dig(:google, :gemini_api_key)
+      
+      if api_key.blank?
+        Rails.logger.error "❌ No Gemini API key found in ENV['GEMINI_API_KEY'] or credentials"
+        @client = nil
+        return
+      end
+      
+      Rails.logger.info "✅ Gemini API key found, initializing client..."
+      
       @client = Gemini.new(
         credentials: {
           service: 'generative-language-api',
-          api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
+          api_key: api_key
         },
         options: { model: 'gemini-2.0-flash', server_sent_events: false }
       )
+      
+      Rails.logger.info "✅ Gemini AI client initialized successfully"
     rescue LoadError => e
       Rails.logger.error "Gemini AI gem not available: #{e.message}"
       @client = nil
@@ -86,37 +100,73 @@ class AiService
     nil
   end
 
-  def lookup_warranty_info(product_name, merchant = nil)
+  def lookup_warranty_info(product_name, merchant = nil, email_content = nil)
     return nil unless @client
 
+    Rails.logger.info "🔍 AI Service: Looking up warranty info for '#{product_name}' from #{merchant}"
+
     prompt = <<~PROMPT
-      Look up warranty information for this product. Return a JSON object with:
-      {
-        "standard_warranty_months": number,
-        "warranty_terms": "brief description of what's covered",
-        "exclusions": "what's not covered",
-        "return_policy_days": number,
-        "confidence": 0.0-1.0
-      }
+      You are a warranty information expert. Your task is to find the ACTUAL WARRANTY PERIOD for this specific product.
       
       Product: #{product_name}
       Merchant: #{merchant || "unknown"}
       
-      Be conservative and only include information you're confident about.
+      STEP 1: First, check if the email receipt contains warranty information:
+      #{email_content ? "Email Receipt Content:\n#{email_content[0..3000]}\n\n" : "No email content provided.\n"}
+      
+      STEP 2: If warranty info is not in the receipt, use your knowledge to research:
+      - Standard manufacturer warranty for this product type
+      - Brand-specific warranty policies
+      - Typical warranty periods for electronics/products in this category
+      - Merchant-specific warranty extensions (e.g., Costco adds extra time)
+      
+      IMPORTANT RULES:
+      1. For ELECTRONICS (laptops, phones, tablets, TVs, appliances): Typically 1 year (12 months) manufacturer warranty
+      2. For MAJOR APPLIANCES (refrigerators, washers, dryers): Often 1-2 years parts, 5-10 years compressor/motor
+      3. For FURNITURE: Typically 1-5 years depending on type
+      4. For TOOLS: Often 1-3 years or lifetime for certain brands
+      5. For COSTCO purchases: Add 1 year to manufacturer warranty for electronics
+      6. For EXTENDED WARRANTIES mentioned in receipt: Use that period
+      7. If you find specific warranty info in the receipt, prioritize that over general knowledge
+      
+      Return a JSON object with:
+      {
+        "warranty_months": number (REQUIRED - the actual warranty period in months),
+        "warranty_type": "manufacturer/extended/limited/lifetime" (REQUIRED),
+        "warranty_source": "receipt/manufacturer_standard/merchant_policy/product_research" (where you found this info),
+        "warranty_details": "specific coverage details if available",
+        "return_policy_days": number (if found),
+        "confidence": 0.0-1.0 (how confident you are about this warranty period)
+      }
+      
+      EXAMPLES:
+      - "iPhone 15 Pro" from Apple → 12 months manufacturer warranty
+      - "Samsung Refrigerator RF28T5001SR" from Best Buy → 12 months parts, 60 months compressor
+      - "LG OLED TV 65 inch" from Costco → 24 months (12 manufacturer + 12 Costco extension)
+      - "DeWalt Power Drill DCD771C2" → 36 months limited warranty
+      
+      Be as accurate as possible. If you're unsure, default to standard warranty for that product category.
     PROMPT
+
+    Rails.logger.debug "📝 Warranty lookup prompt length: #{prompt.length}"
 
     response = @client.generate_content({
       contents: { role: "user", parts: { text: prompt } }
     })
 
     response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
+    Rails.logger.debug "🤖 AI Warranty Response: #{response_text}"
     
     # Clean up markdown code blocks if present
     response_text = response_text.gsub(/```json\s*/, '').gsub(/```\s*$/, '').strip
     
-    JSON.parse(response_text)
+    result = JSON.parse(response_text)
+    Rails.logger.info "✅ AI Warranty Info: #{result['warranty_months']} months (#{result['warranty_type']}) - Source: #{result['warranty_source']}"
+    
+    result
   rescue => e
-    Rails.logger.error "AI warranty lookup failed: #{e.message}"
+    Rails.logger.error "💥 AI warranty lookup failed: #{e.message}"
+    Rails.logger.error "💥 Backtrace: #{e.backtrace.first(5).join('\n')}"
     nil
   end
 

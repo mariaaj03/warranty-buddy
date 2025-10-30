@@ -35,9 +35,11 @@ class GmailService
     begin
       Rails.logger.info "🔍 Starting Gmail receipt parsing for user: #{user_id}"
       
-      # Focused query per request: "your receipt" is broadly used by many merchants
+      # Target major product retailers and electronics merchants
       receipt_queries = [
-        'in:anywhere "confirmation" newer_than:2y'
+        'from:(amazon.com OR ebay.com OR bestbuy.com OR walmart.com OR target.com OR newegg.com OR bhphotovideo.com) subject:(order OR receipt OR shipped OR delivered OR confirmation) newer_than:2y',
+        'from:(apple.com OR samsung.com OR microsoft.com OR dell.com OR hp.com OR lenovo.com) subject:(order OR receipt OR confirmation) newer_than:2y',
+        'from:(costco.com OR homedepot.com OR lowes.com OR macys.com) subject:(order OR receipt) newer_than:2y'
       ]
       
       all_messages = []
@@ -96,11 +98,77 @@ class GmailService
 
   private
 
+  # List of known product/electronics retailers
+  PRODUCT_MERCHANTS = %w[
+    amazon
+    ebay
+    bestbuy
+    walmart
+    target
+    newegg
+    bhphotovideo
+    apple
+    samsung
+    microsoft
+    dell
+    hp
+    lenovo
+    costco
+    homedepot
+    lowes
+    macys
+    adorama
+    microcenter
+    frys
+    tigerdirect
+    rakuten
+    overstock
+    wayfair
+    etsy
+    aliexpress
+    banggood
+    gearbest
+    monoprice
+    bhphoto
+    adoramacamera
+    crutchfield
+    sony
+    lg
+    asus
+    acer
+    msi
+    razer
+    logitech
+    corsair
+    kingston
+    westerndigital
+    seagate
+    sandisk
+    crucial
+    gskill
+    evga
+    gigabyte
+    asrock
+  ].freeze
+
+  def is_product_merchant?(from_header)
+    return false if from_header.blank?
+    
+    from_lower = from_header.downcase
+    PRODUCT_MERCHANTS.any? { |merchant| from_lower.include?(merchant) }
+  end
+
   def parse_single_receipt(message)
     # Headers and content
     subject = message.payload.headers.find { |h| h.name == 'Subject' }&.value || ''
     from    = message.payload.headers.find { |h| h.name == 'From' }&.value || ''
     date_h  = message.payload.headers.find { |h| h.name == 'Date' }&.value
+
+    # Filter out non-product merchants
+    unless is_product_merchant?(from)
+      Rails.logger.info "ℹ️ Skipping non-product merchant: #{from}"
+      return nil
+    end
 
     email_content = extract_email_content(message)
     if email_content.blank?
@@ -121,16 +189,35 @@ class GmailService
     purchase_date = safe_parse_email_date(date_h) || Date.today
     product_name = extract_product_name(subject, email_content)
 
+    # Use AI to look up warranty information for this specific product
+    Rails.logger.info "🔍 Looking up warranty info for: #{product_name}"
+    warranty_info = @ai_service.lookup_warranty_info(product_name, merchant, email_content)
+    
+    warranty_months = nil
+    warranty_type = nil
+    return_policy_days = nil
+    
+    if warranty_info
+      warranty_months = warranty_info['warranty_months']
+      warranty_type = warranty_info['warranty_type']
+      return_policy_days = warranty_info['return_policy_days']
+      Rails.logger.info "✅ Found warranty: #{warranty_months} months (#{warranty_type})"
+    else
+      Rails.logger.warn "⚠️ No warranty info found, using default 12 months"
+      warranty_months = 12  # Default to 1 year if AI lookup fails
+      warranty_type = 'manufacturer'
+    end
+
     {
       product_name: product_name,
       merchant: merchant,
       purchase_date: purchase_date,
-      warranty_months: nil,
-      warranty_type: nil,
-      return_policy_days: nil,
+      warranty_months: warranty_months,
+      warranty_type: warranty_type,
+      return_policy_days: return_policy_days,
       return_deadline: nil,
       confidence: 0.6,
-      source: 'gmail_heuristic',
+      source: 'gmail_ai_warranty',
       raw_email_id: message.id
     }
   end

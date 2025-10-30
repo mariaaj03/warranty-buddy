@@ -120,6 +120,19 @@
     .filters-form input[type="text"] { height: 34px; padding: .25rem .5rem; min-width: 12rem; border:1px solid #bbb; border-radius: .35rem; }
     .filters-actions { display:flex; align-items:center; gap:.5rem; }
     .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    
+    /* Edit mode styles */
+    .edit-input {
+      padding: .4rem .5rem;
+      border: 1px solid #0b57d0;
+      border-radius: .25rem;
+      font-size: .95rem;
+    }
+    
+    .edit-input:focus {
+      outline: 2px solid #0b57d0;
+      outline-offset: 2px;
+    }
   </style>
 </head>
 <body>
@@ -213,25 +226,46 @@
   <table aria-label="warranties">
     <thead>
       <tr>
-        <th>Product</th><th>Merchant</th><th>Purchase Date</th><th>Warranty (months)</th><th>Expires</th><th>Status</th>
+        <th>Product</th><th>Merchant</th><th>Purchase Date</th><th>Warranty (months)</th><th>Expires</th><th>Status</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
       <% if @warranties.empty? %>
-        <tr><td colspan="6">No warranties yet.</td></tr>
+        <tr><td colspan="7">No warranties yet.</td></tr>
       <% else %>
         <% @warranties.each do |w| %>
-          <tr>
-            <td><%= w.product_name %></td>
-            <td><%= w.merchant %></td>
-            <td><%= w.purchase_date.strftime("%Y-%m-%d") %></td>
-            <td><%= w.warranty_months %></td>
+          <tr data-product-id="<%= w.id %>">
+            <!-- Display mode -->
+            <td class="display-mode">
+              <span class="display-value"><%= w.product_name %></span>
+              <input type="text" class="edit-input" name="product_name" value="<%= w.product_name %>" style="display:none; width:100%;" />
+            </td>
+            <td class="display-mode">
+              <span class="display-value"><%= w.merchant %></span>
+              <input type="text" class="edit-input" name="merchant" value="<%= w.merchant %>" style="display:none; width:100%;" />
+            </td>
+            <td class="display-mode">
+              <span class="display-value"><%= w.purchase_date.strftime("%Y-%m-%d") %></span>
+              <input type="date" class="edit-input" name="purchase_date" value="<%= w.purchase_date.strftime("%Y-%m-%d") %>" style="display:none; width:100%;" />
+            </td>
+            <td class="display-mode">
+              <span class="display-value"><%= w.warranty_months %></span>
+              <input type="number" class="edit-input" name="warranty_months" value="<%= w.warranty_months %>" min="0" style="display:none; width:100%;" />
+            </td>
             <td><%= w.expiry_date&.strftime("%Y-%m-%d") || '-' %></td>
             <td>
               <% if w.expiry_date && w.expiry_date >= Date.today %>
                 <span class="status-badge status-active">Active</span>
               <% else %>
                 <span class="status-badge status-expired">Expired</span>
+              <% end %>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-outline edit-btn" data-product-id="<%= w.id %>">✏️ Edit</button>
+              <button class="btn btn-sm btn-primary save-btn" data-product-id="<%= w.id %>" style="display:none;">💾 Save</button>
+              <button class="btn btn-sm btn-outline cancel-btn" data-product-id="<%= w.id %>" style="display:none;">❌ Cancel</button>
+              <%= form_with url: product_path(w), method: :delete, data: { turbo_confirm: "Are you sure you want to delete this product?" }, style: "display:inline;" do %>
+                <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button>
               <% end %>
             </td>
           </tr>
@@ -277,6 +311,110 @@
 
 
 </div>
+
+<script>
+  // Inline editing for products
+  document.addEventListener('DOMContentLoaded', function() {
+    // Edit button click handler
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = this.closest('tr');
+        enterEditMode(row);
+      });
+    });
+
+    // Save button click handler
+    document.querySelectorAll('.save-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = this.closest('tr');
+        saveProduct(row);
+      });
+    });
+
+    // Cancel button click handler
+    document.querySelectorAll('.cancel-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = this.closest('tr');
+        exitEditMode(row);
+      });
+    });
+  });
+
+  function enterEditMode(row) {
+    // Hide display values and show inputs
+    row.querySelectorAll('.display-value').forEach(el => el.style.display = 'none');
+    row.querySelectorAll('.edit-input').forEach(el => el.style.display = 'block');
+    
+    // Toggle buttons
+    row.querySelector('.edit-btn').style.display = 'none';
+    row.querySelector('.save-btn').style.display = 'inline-block';
+    row.querySelector('.cancel-btn').style.display = 'inline-block';
+  }
+
+  function exitEditMode(row) {
+    // Reset inputs to original values
+    row.querySelectorAll('.edit-input').forEach(input => {
+      const displayValue = input.closest('td').querySelector('.display-value');
+      input.value = displayValue.textContent.trim();
+    });
+
+    // Show display values and hide inputs
+    row.querySelectorAll('.display-value').forEach(el => el.style.display = 'inline');
+    row.querySelectorAll('.edit-input').forEach(el => el.style.display = 'none');
+    
+    // Toggle buttons
+    row.querySelector('.edit-btn').style.display = 'inline-block';
+    row.querySelector('.save-btn').style.display = 'none';
+    row.querySelector('.cancel-btn').style.display = 'none';
+  }
+
+  function saveProduct(row) {
+    const productId = row.dataset.productId;
+    const formData = new FormData();
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    
+    // Collect edited values
+    row.querySelectorAll('.edit-input').forEach(input => {
+      formData.append(`product[${input.name}]`, input.value);
+    });
+
+    // Send update request
+    fetch(`/products/${productId}`, {
+      method: 'PATCH',
+      headers: {
+        'X-CSRF-Token': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Update display values with new values
+        row.querySelectorAll('.edit-input').forEach(input => {
+          const displayValue = input.closest('td').querySelector('.display-value');
+          displayValue.textContent = input.value;
+        });
+        
+        exitEditMode(row);
+        
+        // Reload page to update expiry date and status
+        window.location.reload();
+      } else {
+        alert('Failed to update product: ' + (data.errors ? data.errors.join(', ') : 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('An error occurred. Please try again.');
+    });
+  }
+</script>
 
 </body>
 </html>

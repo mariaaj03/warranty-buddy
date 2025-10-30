@@ -32,6 +32,7 @@ Feature: Warranty Buddy Dashboard
     And I should see a "Connect Gmail" button
 
   Scenario: Add a new product warranty
+    Given I am logged in with Gmail
     When I expand "Add a product warranty" section
     And I fill in "Product" with "MacBook Pro"
     And I fill in "Merchant" with "Apple Store"
@@ -47,6 +48,7 @@ Feature: Warranty Buddy Dashboard
     And I should see "Active" status
 
   Scenario: Add product with default values
+    Given I am logged in with Gmail
     When I expand "Add a product warranty" section
     And I fill in "Product" with "iPhone 15"
     And I click "Add warranty"

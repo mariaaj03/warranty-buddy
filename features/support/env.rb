@@ -8,6 +8,15 @@ require 'capybara/rails'
 Capybara.default_driver = :rack_test
 Capybara.app = Rails.application
 
+# Helper to set session variables
+module SessionHelpers
+  def set_session(hash)
+    page.driver.browser.instance_variable_get(:@rack_mock_session).instance_variable_get(:@session).merge!(hash)
+  end
+end
+
+World(SessionHelpers)
+
 # Disable transactional fixtures if using DatabaseCleaner later
 Cucumber::Rails::Database.javascript_strategy = :transaction
 

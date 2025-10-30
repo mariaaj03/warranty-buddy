@@ -6,6 +6,12 @@ Given("I am on the dashboard") do
   visit "/"
 end
 
+Given("I am logged in with Gmail") do
+  # Set up session data for Gmail connection
+  set_session(gmail_uid: "test_user_123", gmail_token: "test_token")
+  visit "/"
+end
+
 When("I visit the homepage") do
   visit "/"
 end
@@ -155,7 +161,8 @@ Given("I have added a warranty for {string}") do |product_name|
     product_name: product_name,
     merchant: "Test Merchant",
     purchase_date: Date.today,
-    warranty_months: 12
+    warranty_months: 12,
+    gmail_uid: "test_user_123"
   )
 end
 
@@ -164,7 +171,8 @@ Given("I have added a warranty for {string} from {string}") do |product_name, me
     product_name: product_name,
     merchant: merchant,
     purchase_date: Date.today,
-    warranty_months: 12
+    warranty_months: 12,
+    gmail_uid: "test_user_123"
   )
 end
 
@@ -173,7 +181,8 @@ Given("I have added a warranty for {string} with purchase date {string} and warr
     product_name: product_name,
     merchant: "Test Merchant",
     purchase_date: Date.parse(purchase_date),
-    warranty_months: warranty_months.to_i
+    warranty_months: warranty_months.to_i,
+    gmail_uid: "test_user_123"
   )
 end
 

@@ -6,11 +6,7 @@ Rails.application.routes.draw do
   get '/auth/failure', to: redirect('/')
 
   #csv/ical routes
-  resources :products, only: [] do
-    collection { get :export }  # /products/export.csv
-  end
-
-  resources :products, only: [] do
+  resources :products, only: [:update, :destroy] do
     collection do
       get :export                  # CSV
       get :calendar, defaults: { format: :ics }  # iCal

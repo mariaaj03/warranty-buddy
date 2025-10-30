@@ -4,7 +4,8 @@ RSpec.describe "dashboard/index", type: :view do
   before do
     assign(:title, "Warranty Buddy - Iteration 1")
     assign(:subtitle, "Your Digital Memory for Every Purchase")
-    assign(:warranties, [])
+    assign(:warranties, Product.none)
+    assign(:merchants, [])
     assign(:gmail_connected, false)
     assign(:gmail_messages, [])
   end
@@ -39,14 +40,15 @@ RSpec.describe "dashboard/index", type: :view do
 
   it "shows empty warranties table when no products" do
     render
-    expect(rendered).to include("Please connect your Gmail account to view warranties.")
+    expect(rendered).to include("No warranties yet.")
   end
 
   context "with products" do
     let(:product) { create(:product, product_name: "Test Product", merchant: "Amazon") }
 
     before do
-      assign(:warranties, [product])
+      assign(:warranties, Product.where(id: product.id))
+      assign(:merchants, ["Amazon"])
     end
 
     it "displays products in the table" do
@@ -62,7 +64,8 @@ RSpec.describe "dashboard/index", type: :view do
 
     it "shows expired status for old warranty" do
       expired_product = create(:product, :expired, product_name: "Old Product")
-      assign(:warranties, [expired_product])
+      assign(:warranties, Product.where(id: expired_product.id))
+      assign(:merchants, ["TestMerchant"])
       render
       expect(rendered).to include("Expired")
     end

@@ -1,6 +1,30 @@
 class ProductsController < ApplicationController
     require "csv"
   
+    before_action :require_gmail_connection, only: [:update, :destroy]
+    before_action :set_product, only: [:update, :destroy]
+
+    # Update a product (inline editing)
+    def update
+      if @product.update(product_params)
+        respond_to do |format|
+          format.html { redirect_to root_path, notice: "Product updated successfully" }
+          format.json { render json: { success: true, message: "Product updated successfully" }, status: :ok }
+        end
+      else
+        respond_to do |format|
+          format.html { redirect_to root_path, alert: "Failed to update product: #{@product.errors.full_messages.join(', ')}" }
+          format.json { render json: { success: false, errors: @product.errors.full_messages }, status: :unprocessable_entity }
+        end
+      end
+    end
+
+    # Delete a product
+    def destroy
+      @product.destroy
+      redirect_to root_path, notice: "Product deleted successfully"
+    end
+
     # Export all warranties for the connected Gmail user as CSV
     def export
       unless session[:gmail_uid]
@@ -102,6 +126,24 @@ class ProductsController < ApplicationController
         headers["Content-Disposition"] = 'attachment; filename="warranty_buddy.ics"'
         render plain: cal.to_ical
       end
+
+    private
+
+    def require_gmail_connection
+      unless session[:gmail_uid]
+        redirect_to root_path, alert: "Please connect Gmail first."
+      end
+    end
+
+    def set_product
+      @product = Product.for_user(session[:gmail_uid]).find(params[:id])
+    rescue ActiveRecord::RecordNotFound
+      redirect_to root_path, alert: "Product not found"
+    end
+
+    def product_params
+      params.require(:product).permit(:product_name, :merchant, :purchase_date, :warranty_months)
+    end
       
 end
   

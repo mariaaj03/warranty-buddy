@@ -13,7 +13,7 @@ RSpec.describe GmailService, type: :service do
   describe '#list_messages' do
     let(:mock_gmail_service) { double('GmailService') }
     let(:mock_messages) { [double('Message', id: 'msg1'), double('Message', id: 'msg2')] }
-    let(:mock_result) { double('Result', messages: mock_messages) }
+    let(:mock_result) { double('Result', messages: mock_messages, next_page_token: nil) }
 
     before do
       allow(Google::Apis::GmailV1::GmailService).to receive(:new).and_return(mock_gmail_service)
@@ -28,7 +28,7 @@ RSpec.describe GmailService, type: :service do
 
     it 'calls list_user_messages with correct parameters' do
       service.list_messages('me', 'subject:receipt')
-      expect(mock_gmail_service).to have_received(:list_user_messages).with('me', q: 'subject:receipt')
+      expect(mock_gmail_service).to have_received(:list_user_messages).with('me', q: 'subject:receipt', page_token: nil, max_results: 100)
     end
 
     it 'returns empty array when no messages' do
