@@ -71,9 +71,7 @@ Add the following structure:
 
 ```yaml
 google:
-  GOOGLE_CLIENT_ID=785809032235-786d4mbrv3l9o3ac17khlsfkfc1eofgr.apps.googleusercontent.com
-  GOOGLE_CLIENT_SECRET=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
-  GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:3000/auth/google_oauth2/callback
+  .env will send separtly 
 ```
 
 **To obtain credentials:**
