@@ -13,7 +13,7 @@ RSpec.describe GmailFetcher do
   describe '#list_order_messages' do
     let(:message1) { double('Message', id: 'msg1') }
     let(:message2) { double('Message', id: 'msg2') }
-    let(:response) { double('Response', messages: [message1, message2], next_page_token: nil) }
+    let(:response) { double('Response', messages: [ message1, message2 ], next_page_token: nil) }
 
     before do
       allow(gmail_service).to receive(:list_user_messages).and_return(response)
@@ -26,9 +26,9 @@ RSpec.describe GmailFetcher do
     end
 
     it 'removes duplicate messages' do
-      duplicate_response = double('Response', messages: [message1, message1, message2], next_page_token: nil)
+      duplicate_response = double('Response', messages: [ message1, message1, message2 ], next_page_token: nil)
       allow(gmail_service).to receive(:list_user_messages).and_return(duplicate_response)
-      
+
       result = fetcher.list_order_messages
       expect(result.length).to eq(2)
     end
@@ -41,7 +41,7 @@ RSpec.describe GmailFetcher do
     it 'handles empty response' do
       allow(gmail_service).to receive(:list_user_messages)
         .and_return(double('Response', messages: nil, next_page_token: nil))
-      
+
       result = fetcher.list_order_messages
       expect(result).to be_empty
     end
@@ -63,10 +63,10 @@ RSpec.describe GmailFetcher do
   describe '#extract_html_from_message' do
     let(:html_content) { '<html><body>Test</body></html>' }
     let(:encoded_html) { Base64.urlsafe_encode64(html_content) }
-    
+
     it 'extracts HTML from message body' do
-      message = double('Message', 
-        payload: double('Payload', 
+      message = double('Message',
+        payload: double('Payload',
           body: double('Body', data: encoded_html),
           parts: nil
         )
@@ -85,7 +85,7 @@ RSpec.describe GmailFetcher do
       message = double('Message',
         payload: double('Payload',
           body: nil,
-          parts: [html_part]
+          parts: [ html_part ]
         )
       )
 
@@ -131,7 +131,7 @@ RSpec.describe GmailFetcher do
       message = double('Message',
         payload: double('Payload',
           body: nil,
-          parts: [text_part]
+          parts: [ text_part ]
         )
       )
 
@@ -153,7 +153,7 @@ RSpec.describe GmailFetcher do
     it 'extracts attachments from message parts' do
       message = double('Message',
         payload: double('Payload',
-          parts: [attachment]
+          parts: [ attachment ]
         )
       )
 
@@ -169,13 +169,13 @@ RSpec.describe GmailFetcher do
 
     it 'handles nested attachments' do
       nested_part = double('Part',
-        parts: [attachment],
+        parts: [ attachment ],
         filename: nil,
         body: nil
       )
       message = double('Message',
         payload: double('Payload',
-          parts: [nested_part]
+          parts: [ nested_part ]
         )
       )
 

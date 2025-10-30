@@ -6,7 +6,7 @@ module TestHelpers
       gmail_token: "test_token_123"
     })
   end
-  
+
   def clear_gmail_connection
     # Clear the session to simulate no Gmail connection
     allow_any_instance_of(ActionController::TestRequest).to receive(:session).and_return({})

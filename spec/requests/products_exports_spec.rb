@@ -7,7 +7,7 @@ RSpec.describe "Products exports", type: :request do
         allow_any_instance_of(ActionDispatch::Request)
           .to receive(:session).and_return(test_session)
       end
-      
+
 
   describe "GET /products/export.csv" do
     it "returns CSV with rows" do
@@ -26,10 +26,10 @@ RSpec.describe "Products exports", type: :request do
   describe "GET /products/calendar (iCal)" do
     # Product that WILL have an expiry (via purchase_date + warranty_months)
     let!(:p1) { create(:product, :expiring_soon, gmail_uid: "demo_uid", product_name: "Alpha") }
-  
+
     # Product that WON'T (forces skip branch)
     let!(:p2) { create(:product, gmail_uid: "demo_uid", product_name: "Beta", warranty_months: nil) }
-  
+
     it "downloads ICS with no alarms when no reminders passed" do
       get calendar_products_path
       expect(response).to have_http_status(:ok)
@@ -40,7 +40,7 @@ RSpec.describe "Products exports", type: :request do
       expect(body).to include("SUMMARY:Warranty expires: Alpha")
       expect(body).not_to include("TRIGGER")
     end
-  
+
     it "adds absolute TRIGGERs when reminders are provided" do
       get calendar_products_path, params: { reminders: %w[0 7 30] }
       body = response.body
@@ -48,7 +48,7 @@ RSpec.describe "Products exports", type: :request do
       expect(body.scan("BEGIN:VALARM").size).to eq(3)
     trigger_regex = /
     TRIGGER              # field
-    (?:;[^:\r\n]+)?      
+    (?:;[^:\r\n]+)?
     :                    # colon
     (?:                  # value can be:
         \d{8}T\d{6}Z?     #   absolute datetime (UTC or local)
@@ -62,7 +62,7 @@ RSpec.describe "Products exports", type: :request do
       expect(body).to include("DTEND;VALUE=DATE:")
     end
 end
-  
+
 
   it "redirects to root with an alert" do
     allow_any_instance_of(ActionDispatch::Request)
@@ -72,5 +72,4 @@ end
     follow_redirect!
     expect(response.body).to include("Please connect Gmail first.")
   end
-  
 end

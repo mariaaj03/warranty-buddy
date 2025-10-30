@@ -5,7 +5,7 @@ SimpleCov.enable_coverage :branch
 SimpleCov.minimum_coverage 85
 SimpleCov.use_merging true
 
-SimpleCov.formatters = [SimpleCov::Formatter::HTMLFormatter]
+SimpleCov.formatters = [ SimpleCov::Formatter::HTMLFormatter ]
 
 # Good defaults for Rails apps
 SimpleCov.start 'rails' do

@@ -67,7 +67,7 @@ RSpec.configure do |config|
 
   # Include FactoryBot methods
   config.include FactoryBot::Syntax::Methods
-  
+
   # Include session helpers for request specs
   config.include RSpec::Rails::RequestExampleGroup, type: :request
 end

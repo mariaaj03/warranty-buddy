@@ -2,10 +2,10 @@ Rails.application.routes.draw do
   root "dashboard#index"
 
   # OAuth callback & failure
-  get '/auth/:provider/callback', to: 'dashboard#google_auth'
-  get '/auth/failure', to: 'dashboard#oauth_failure'
+  get "/auth/:provider/callback", to: "dashboard#google_auth"
+  get "/auth/failure", to: "dashboard#oauth_failure"
 
-  #csv/ical routes
+  # csv/ical routes
   resources :products, only: [] do
     collection { get :export }  # /products/export.csv
   end
@@ -17,7 +17,7 @@ Rails.application.routes.draw do
     end
   end
 
-  
+
 
   # Dashboard routes
   get "dashboard/index"

@@ -4,7 +4,7 @@ RSpec.describe GoogleSearchService do
   let(:service) { described_class.new }
   let(:api_key) { 'test_api_key' }
   let(:search_engine_id) { 'test_search_engine_id' }
-  
+
   before do
     allow(Rails.application.credentials).to receive(:dig)
       .with(:google, :search_api_key).and_return(api_key)
@@ -26,7 +26,7 @@ RSpec.describe GoogleSearchService do
     end
 
     let(:success_response) { double('Response', code: '200', body: sample_response) }
-    
+
     before do
       allow(Net::HTTP).to receive(:get_response).and_return(success_response)
     end
@@ -42,7 +42,7 @@ RSpec.describe GoogleSearchService do
     it 'returns nil when credentials are missing' do
       allow(Rails.application.credentials).to receive(:dig)
         .with(:google, :search_api_key).and_return(nil)
-      
+
       result = service.lookup_warranty_info('Test Product')
       expect(result).to be_nil
     end
@@ -50,7 +50,7 @@ RSpec.describe GoogleSearchService do
     it 'handles API errors gracefully' do
       allow(Net::HTTP).to receive(:get_response)
         .and_return(double('Response', code: '500', body: 'Error'))
-      
+
       result = service.lookup_warranty_info('Test Product')
       expect(result[:warranty_months]).to eq(12) # Default warranty
       expect(result[:return_policy_days]).to eq(30) # Default return policy
@@ -58,7 +58,7 @@ RSpec.describe GoogleSearchService do
 
     it 'handles network errors gracefully' do
       allow(Net::HTTP).to receive(:get_response).and_raise(StandardError)
-      
+
       result = service.lookup_warranty_info('Test Product')
       expect(result[:warranty_months]).to eq(12) # Default warranty
       expect(result[:return_policy_days]).to eq(30) # Default return policy
@@ -94,7 +94,7 @@ RSpec.describe GoogleSearchService do
           'link' => 'https://example.com'
         }
       ]
-      
+
       result = service.send(:extract_warranty_info, results_with_years, 'Test Product', nil)
       expect(result[:warranty_months]).to eq(24)
     end

@@ -14,7 +14,7 @@ RSpec.describe ReceiptProcessor do
     before do
       stub_const('PDF::Reader', class_double('PDF::Reader'))
       allow(PDF::Reader).to receive(:new).and_return(pdf_reader)
-      allow(pdf_reader).to receive(:pages).and_return([page])
+      allow(pdf_reader).to receive(:pages).and_return([ page ])
     end
 
     it 'processes PDF data successfully' do

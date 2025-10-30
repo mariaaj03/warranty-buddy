@@ -21,7 +21,7 @@ RSpec.describe "Dashboard", type: :request do
       # Mock the controller to simulate Gmail connection
       allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
       allow_any_instance_of(DashboardController).to receive(:instance_variable_get).with(:@gmail_connected).and_return(true)
-      
+
       get root_path
       expect(response.body).to include("Connected")
     end
@@ -32,7 +32,7 @@ RSpec.describe "Dashboard", type: :request do
       allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
       allow_any_instance_of(DashboardController).to receive(:instance_variable_get).with(:@gmail_connected).and_return(true)
       allow_any_instance_of(DashboardController).to receive(:instance_variable_set).with(:@warranties, anything)
-      
+
       get root_path
       expect(response.body).to include("Test Product")
     end
@@ -56,7 +56,7 @@ RSpec.describe "Dashboard", type: :request do
 
     it "requires Gmail connection for all uploads" do
       post "/upload", params: { product: "iPhone 15" }
-      
+
       expect(response).to redirect_to(root_path)
       follow_redirect!
       expect(response.body).to include("Please connect your Gmail account first")
@@ -74,7 +74,7 @@ RSpec.describe "Dashboard", type: :request do
         product: "Test Product",
         purchase_date: "invalid-date"
       }
-      
+
       expect(response).to redirect_to(root_path)
       follow_redirect!
       expect(response.body).to include("Please connect your Gmail account first")
@@ -85,7 +85,7 @@ RSpec.describe "Dashboard", type: :request do
         product: "Test Product",
         warranty_length: "-5"
       }
-      
+
       expect(response).to redirect_to(root_path)
       follow_redirect!
       expect(response.body).to include("Please connect your Gmail account first")
@@ -185,7 +185,7 @@ RSpec.describe "Dashboard", type: :request do
     it "returns JSON with ok status" do
       get "/dashboard/api_health"
       expect(response).to have_http_status(:ok)
-      
+
       json_response = JSON.parse(response.body)
       expect(json_response['ok']).to be true
     end
@@ -203,9 +203,9 @@ RSpec.describe "Dashboard", type: :request do
       # Mock the controller to simulate Gmail connection
       allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
       allow_any_instance_of(DashboardController).to receive(:instance_variable_get).with(:@gmail_connected).and_return(true)
-      
+
       get "/dashboard/api_warranties"
-      
+
       expect(response).to have_http_status(:ok)
       json_response = JSON.parse(response.body)
       expect(json_response).to be_an(Array)
@@ -215,9 +215,9 @@ RSpec.describe "Dashboard", type: :request do
   describe "POST /reset" do
     it "clears session but keeps warranties" do
       create(:product, gmail_uid: 'test_user')
-      
+
       post "/reset"
-      
+
       expect(Product.count).to eq(1) # Warranties are kept
       expect(response).to have_http_status(:ok)
     end
@@ -225,7 +225,7 @@ RSpec.describe "Dashboard", type: :request do
 
   describe "POST /parse_gmail_receipts" do
     let(:gmail_service) { instance_double(GmailService) }
-    
+
     context "when Gmail is connected" do
       before do
         allow_any_instance_of(DashboardController).to receive(:set_gmail_status)
@@ -403,7 +403,7 @@ RSpec.describe "Dashboard", type: :request do
     end
 
     it "sorts by different criteria" do
-      ['expiry_date', 'product_name', 'purchase_date', 'merchant'].each do |sort_by|
+      [ 'expiry_date', 'product_name', 'purchase_date', 'merchant' ].each do |sort_by|
         get root_path, params: { sort: sort_by }
         expect(response).to have_http_status(:success)
         expect(assigns(:warranties)).to be_present
@@ -413,7 +413,7 @@ RSpec.describe "Dashboard", type: :request do
     it "handles Gmail API errors during receipt parsing" do
       allow_any_instance_of(DashboardController).to receive(:instance_variable_get)
         .with(:@gmail_connected).and_return(true)
-      
+
       post "/parse_gmail_receipts"
       expect(response).to redirect_to(root_path)
       expect(flash[:alert]).to be_present
@@ -443,6 +443,3 @@ RSpec.describe "Dashboard", type: :request do
     end
   end
 end
-
-
-

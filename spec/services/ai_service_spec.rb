@@ -13,7 +13,7 @@ RSpec.describe AiService, type: :service do
 
   class FakeGeminiClient
     def initialize(resp_map = {})
-      @resp_map = resp_map 
+      @resp_map = resp_map
     end
 
     def generate_content(args)
@@ -92,14 +92,14 @@ RSpec.describe AiService, type: :service do
     end
   end
 
- 
+
   context "without DI (class as-is)" do
     it "sets @client=nil when gem missing (LoadError) and methods return nil" do
       allow(Kernel).to receive(:require).with("gemini-ai").and_raise(LoadError.new("no gem"))
       svc = described_class.new
       expect(svc.extract_receipt_info("anything")).to be_nil
       expect(svc.lookup_warranty_info("Widget")).to be_nil
-      expect(svc.check_warranty_eligibility("Widget","Issue","Terms")).to be_nil
+      expect(svc.check_warranty_eligibility("Widget", "Issue", "Terms")).to be_nil
     end
 
     it "uses a real Gemini.new stub when gem present" do
@@ -119,6 +119,6 @@ RSpec.describe AiService, type: :service do
     svc = described_class.new(client: bad_client)
     expect(svc.extract_receipt_info("x")).to be_nil
     expect(svc.lookup_warranty_info("Widget")).to be_nil
-    expect(svc.check_warranty_eligibility("W","I","T")).to be_nil
+    expect(svc.check_warranty_eligibility("W", "I", "T")).to be_nil
   end
 end
