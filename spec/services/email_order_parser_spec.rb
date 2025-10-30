@@ -215,7 +215,7 @@ RSpec.describe EmailOrderParser, type: :service do
     end
 
     it 'returns nil for invalid price formats' do
-      ['invalid', '', nil, 'price: 99.99'].each do |invalid_price|
+      [ 'invalid', '', nil, 'price: 99.99' ].each do |invalid_price|
         expect(parser.send(:parse_price, invalid_price)).to be_nil
       end
     end
@@ -223,7 +223,7 @@ RSpec.describe EmailOrderParser, type: :service do
 
   describe '#is_order_email?' do
     it 'identifies order emails by subject keywords' do
-      keywords = ['order', 'receipt', 'invoice', 'confirmation', 'shipped', 'delivered']
+      keywords = [ 'order', 'receipt', 'invoice', 'confirmation', 'shipped', 'delivered' ]
       keywords.each do |keyword|
         parser = described_class.new('', '', "Your #{keyword}", '')
         expect(parser.is_order_email?).to be true
@@ -324,14 +324,14 @@ RSpec.describe EmailOrderParser, type: :service do
 
   describe '#find_column_index' do
     it 'finds column index by keywords' do
-      headers = ['item name', 'quantity', 'price']
-      result = parser.send(:find_column_index, headers, ['item', 'product'])
+      headers = [ 'item name', 'quantity', 'price' ]
+      result = parser.send(:find_column_index, headers, [ 'item', 'product' ])
       expect(result).to eq(0)
     end
 
     it 'returns nil when keyword not found' do
-      headers = ['item name', 'quantity', 'price']
-      result = parser.send(:find_column_index, headers, ['notfound'])
+      headers = [ 'item name', 'quantity', 'price' ]
+      result = parser.send(:find_column_index, headers, [ 'notfound' ])
       expect(result).to be_nil
     end
   end

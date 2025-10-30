@@ -5,48 +5,48 @@ class DashboardController < ApplicationController
   def index
     @title = "Warranty Buddy  -  Iteration 1"
     @subtitle = "Your Digital Memory for Every Purchase"
-    
+
     @search_term = params[:search]
     @status_filter = params[:status]
     @merchant_filter = params[:merchant]
-    @sort_by = params[:sort] || 'expiry_date'
-    
+    @sort_by = params[:sort] || "expiry_date"
+
     if @gmail_connected && session[:gmail_uid]
       @warranties = Product.for_user(session[:gmail_uid])
     else
       @warranties = Product.none
     end
-    
+
     @warranties = @warranties.search(@search_term) if @search_term.present?
-    
+
     case @status_filter
-    when 'active'
+    when "active"
       @warranties = @warranties.active
-    when 'expired'
+    when "expired"
       @warranties = @warranties.expired
-    when 'expiring_soon'
+    when "expiring_soon"
       @warranties = @warranties.expiring_soon
     end
-    
+
     @warranties = @warranties.by_merchant(@merchant_filter) if @merchant_filter.present?
     @merchants = @warranties.distinct.pluck(:merchant).compact.sort
-    
+
     case @sort_by
-    when 'expiry_date'
+    when "expiry_date"
       @warranties = @warranties.order(:purchase_date, :warranty_months)
-    when 'product_name'
+    when "product_name"
       @warranties = @warranties.order(:product_name)
-    when 'purchase_date'
+    when "purchase_date"
       @warranties = @warranties.order(:purchase_date)
-    when 'merchant'
+    when "merchant"
       @warranties = @warranties.order(:merchant)
     end
-    
+
     @gmail_messages = []
   end
 
   def google_auth
-    auth_info = request.env['omniauth.auth']
+    auth_info = request.env["omniauth.auth"]
 
     session[:gmail_uid] = auth_info.uid
     session[:gmail_token] = auth_info.credentials.token
@@ -59,7 +59,7 @@ class DashboardController < ApplicationController
     session.delete(:gmail_uid)
     session.delete(:gmail_token)
     session.delete(:gmail_refresh_token)
-    
+
     redirect_to root_path, alert: "Gmail connection was denied or failed"
   end
 
@@ -105,7 +105,7 @@ class DashboardController < ApplicationController
     else
       warranties = Product.none
     end
-    
+
     render json: warranties.map { |p|
       {
         id: p.id,
@@ -145,7 +145,7 @@ class DashboardController < ApplicationController
       created_count = 0
       parsed_receipts.each do |receipt_data|
         next if receipt_data[:product_name].blank?
-        
+
         existing_product = Product.find_by(raw_email_id: receipt_data[:raw_email_id])
         next if existing_product
         next if receipt_data[:product_name].blank? || receipt_data[:purchase_date].blank?
@@ -199,10 +199,10 @@ class DashboardController < ApplicationController
     end
 
     result = product.check_warranty_eligibility(issue_description)
-    
+
     respond_to do |format|
       format.json { render json: result }
-      format.html { redirect_to root_path, notice: result['reasoning'] }
+      format.html { redirect_to root_path, notice: result["reasoning"] }
     end
   rescue ActiveRecord::RecordNotFound
     respond_to do |format|
@@ -256,7 +256,7 @@ class DashboardController < ApplicationController
           return
         end
       end
-      
+
       product.update!(
         product_name: params[:product_name],
         merchant: params[:merchant],

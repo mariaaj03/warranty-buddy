@@ -46,7 +46,7 @@ RSpec.describe "dashboard/index", type: :view do
     let(:product) { create(:product, product_name: "Test Product", merchant: "Amazon") }
 
     before do
-      assign(:warranties, [product])
+      assign(:warranties, [ product ])
     end
 
     it "displays products in the table" do
@@ -62,7 +62,7 @@ RSpec.describe "dashboard/index", type: :view do
 
     it "shows expired status for old warranty" do
       expired_product = create(:product, :expired, product_name: "Old Product")
-      assign(:warranties, [expired_product])
+      assign(:warranties, [ expired_product ])
       render
       expect(rendered).to include("Expired")
     end

@@ -1,6 +1,6 @@
-require 'net/http'
-require 'json'
-require 'uri'
+require "net/http"
+require "json"
+require "uri"
 
 class GoogleSearchService
   def initialize
@@ -13,7 +13,7 @@ class GoogleSearchService
 
     search_query = build_warranty_query(product_name, merchant)
     search_results = perform_search(search_query)
-    
+
     return nil unless search_results&.any?
 
     extract_warranty_info(search_results, product_name, merchant)
@@ -29,7 +29,7 @@ class GoogleSearchService
   end
 
   def perform_search(query)
-    uri = URI('https://www.googleapis.com/customsearch/v1')
+    uri = URI("https://www.googleapis.com/customsearch/v1")
     params = {
       key: @api_key,
       cx: @search_engine_id,
@@ -39,9 +39,9 @@ class GoogleSearchService
     uri.query = URI.encode_www_form(params)
 
     response = Net::HTTP.get_response(uri)
-    
-    if response.code == '200'
-      JSON.parse(response.body)['items'] || []
+
+    if response.code == "200"
+      JSON.parse(response.body)["items"] || []
     else
       Rails.logger.error "Google Search API error: #{response.code} - #{response.body}"
       []
@@ -55,13 +55,13 @@ class GoogleSearchService
     warranty_info = {
       warranty_months: nil,
       return_policy_days: nil,
-      source: 'google_search',
+      source: "google_search",
       details: []
     }
 
     search_results.each do |result|
-      title = result['title'] || ''
-      snippet = result['snippet'] || ''
+      title = result["title"] || ""
+      snippet = result["snippet"] || ""
       content = "#{title} #{snippet}".downcase
 
       # Look for warranty length patterns
@@ -77,7 +77,7 @@ class GoogleSearchService
           months = match[1].to_i
           # Convert years to months
           months *= 12 if content.match?(/year/i)
-          
+
           if warranty_info[:warranty_months].nil? || months > warranty_info[:warranty_months]
             warranty_info[:warranty_months] = months
           end
@@ -105,7 +105,7 @@ class GoogleSearchService
         warranty_info[:details] << {
           title: title,
           snippet: snippet,
-          url: result['link']
+          url: result["link"]
         }
       end
     end

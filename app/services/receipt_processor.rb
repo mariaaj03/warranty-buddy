@@ -1,10 +1,10 @@
 begin
-  require 'pdf-reader'
-  require 'rtesseract'
+  require "pdf-reader"
+  require "rtesseract"
 rescue LoadError => e
   Rails.logger.warn "PDF/OCR libraries not available: #{e.message}"
 end
-require 'tempfile'
+require "tempfile"
 
 class ReceiptProcessor
   def initialize
@@ -16,14 +16,14 @@ class ReceiptProcessor
     return nil unless defined?(PDF::Reader)
 
     begin
-      temp_file = create_temp_file(pdf_data, '.pdf')
+      temp_file = create_temp_file(pdf_data, ".pdf")
       reader = PDF::Reader.new(temp_file.path)
-      
+
       text = ""
       reader.pages.each do |page|
         text += page.text + "\n"
       end
-      
+
       parse_receipt_text(text)
     rescue => e
       Rails.logger.error "PDF processing failed: #{e.message}"
@@ -37,13 +37,13 @@ class ReceiptProcessor
 
     begin
       # Determine file extension
-      ext = determine_image_extension(filename) || '.jpg'
+      ext = determine_image_extension(filename) || ".jpg"
       temp_file = create_temp_file(image_data, ext)
-      
+
       # Use OCR to extract text
       image = RTesseract.new(temp_file.path)
       text = image.to_s
-      
+
       parse_receipt_text(text)
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
@@ -64,7 +64,7 @@ class ReceiptProcessor
   private
 
   def create_temp_file(data, extension)
-    temp_file = Tempfile.new(['receipt', extension])
+    temp_file = Tempfile.new([ "receipt", extension ])
     temp_file.binmode
     temp_file.write(data)
     temp_file.rewind
@@ -74,12 +74,12 @@ class ReceiptProcessor
 
   def determine_image_extension(filename)
     return nil unless filename.present?
-    
+
     ext = File.extname(filename).downcase
     return ext if %w[.jpg .jpeg .png .gif .bmp .tiff].include?(ext)
-    
+
     # Try to determine from content type or default to jpg
-    '.jpg'
+    ".jpg"
   end
 
   def parse_receipt_text(text)
@@ -97,10 +97,10 @@ class ReceiptProcessor
   def extract_merchant_from_receipt(text)
     # Look for store names in the text
     common_merchants = %w[Amazon Best\s+Buy Walmart Target Costco Newegg B&H\s+Photo Apple Microsoft Home\s+Depot Lowes]
-    
+
     common_merchants.each do |merchant|
       if text.match?(/#{merchant}/i)
-        return merchant.gsub(/\s+/, ' ')
+        return merchant.gsub(/\s+/, " ")
       end
     end
 
@@ -125,7 +125,7 @@ class ReceiptProcessor
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i
     ]
-    
+
     date_patterns.each do |pattern|
       if match = text.match(pattern)
         begin
@@ -141,13 +141,13 @@ class ReceiptProcessor
 
   def extract_items_from_receipt(text)
     items = []
-    
+
     # Look for line item patterns
     line_patterns = [
       /(\d+)\s+(.{3,80}?)\s+([0-9\.,]+)/,
       /(.{3,80}?)\s+([0-9\.,]+)/
     ]
-    
+
     line_patterns.each do |pattern|
       text.scan(pattern).each do |match|
         if match.length == 3
@@ -161,9 +161,9 @@ class ReceiptProcessor
           name = match[0].strip
           price = parse_price(match[1])
         end
-        
+
         next if name.length < 3 || price.nil?
-        
+
         items << {
           name: name,
           quantity: qty,
@@ -171,7 +171,7 @@ class ReceiptProcessor
         }
       end
     end
-    
+
     items.uniq { |item| item[:name] }
   end
 
@@ -182,13 +182,13 @@ class ReceiptProcessor
       /amount due[:\s]*\$?([0-9\.,]+)/i,
       /subtotal[:\s]*\$?([0-9\.,]+)/i
     ]
-    
+
     total_patterns.each do |pattern|
       if match = text.match(pattern)
         return parse_price(match[1])
       end
     end
-    
+
     nil
   end
 
@@ -198,32 +198,32 @@ class ReceiptProcessor
       /receipt\s*(?:number|#)[:\s]*([A-Z0-9\-]{6,40})/i,
       /transaction\s*(?:number|id)[:\s]*([A-Z0-9\-]{6,40})/i
     ]
-    
+
     order_patterns.each do |pattern|
       if match = text.match(pattern)
         return match[1].strip
       end
     end
-    
+
     nil
   end
 
   def parse_price(price_string)
     return nil if price_string.blank?
-    
+
     # Remove currency symbols and clean up
-    cleaned = price_string.gsub(/[^\d\.,]/, '')
+    cleaned = price_string.gsub(/[^\d\.,]/, "")
     return nil if cleaned.blank?
-    
+
     # Handle different decimal separators
-    if cleaned.include?(',') && cleaned.include?('.')
+    if cleaned.include?(",") && cleaned.include?(".")
       # Assume comma is thousands separator
-      cleaned = cleaned.gsub(',', '')
-    elsif cleaned.include?(',') && !cleaned.include?('.')
+      cleaned = cleaned.gsub(",", "")
+    elsif cleaned.include?(",") && !cleaned.include?(".")
       # Assume comma is decimal separator
-      cleaned = cleaned.gsub(',', '.')
+      cleaned = cleaned.gsub(",", ".")
     end
-    
+
     cleaned.to_f
   rescue
     nil

@@ -55,24 +55,23 @@ group :development, :test do
 
   gem "rspec-rails", "~> 6.0"
   gem "cucumber-rails", require: false
-  gem "factory_bot_rails" 
+  gem "factory_bot_rails"
 
-  gem 'omniauth'
-  gem 'omniauth-google-oauth2'
-  gem 'omniauth-rails_csrf_protection'
-  gem 'google-api-client'
-  gem 'attr_encrypted'
-  gem 'sidekiq'
-  gem 'gemini-ai', '~> 4.3.0'
-  gem 'nokogiri'
-  gem 'mail'
-  gem 'pdf-reader'
-  gem 'rtesseract'
-  gem 'chronic'
-  gem 'money'
+  gem "omniauth"
+  gem "omniauth-google-oauth2"
+  gem "omniauth-rails_csrf_protection"
+  gem "google-api-client"
+  gem "attr_encrypted"
+  gem "sidekiq"
+  gem "gemini-ai", "~> 4.3.0"
+  gem "nokogiri"
+  gem "mail"
+  gem "pdf-reader"
+  gem "rtesseract"
+  gem "chronic"
+  gem "money"
   gem "icalendar"
-  gem "dotenv-rails", groups: [:development, :test]
-
+  gem "dotenv-rails", groups: [ :development, :test ]
 end
 
 group :development do
@@ -85,8 +84,6 @@ group :test do
   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
   gem "capybara"
   gem "selenium-webdriver"
-  gem 'simplecov', require: false
-  gem 'database_cleaner-active_record'
+  gem "simplecov", require: false
+  gem "database_cleaner-active_record"
 end
-
-

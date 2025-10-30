@@ -1,13 +1,13 @@
 class AiService
   def initialize
     begin
-      require 'gemini-ai'
+      require "gemini-ai"
       @client = Gemini.new(
         credentials: {
-          service: 'generative-language-api',
+          service: "generative-language-api",
           api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
         },
-        options: { model: 'gemini-2.0-flash', server_sent_events: false }
+        options: { model: "gemini-2.0-flash", server_sent_events: false }
       )
     rescue LoadError => e
       Rails.logger.error "Gemini AI gem not available: #{e.message}"
@@ -26,7 +26,7 @@ class AiService
 
     prompt = <<~PROMPT
       Analyze this email and determine if it contains purchase/receipt information for a physical product.
-      
+
       Look for ANY indication this is a purchase receipt for a physical item:
       - Product names, descriptions, or SKUs
       - Purchase amounts, prices, or totals
@@ -34,9 +34,9 @@ class AiService
       - Shipping information, tracking numbers
       - Merchant/store information
       - Words like: "order", "purchase", "bought", "shipped", "delivered", "receipt", "invoice", "confirmation"
-      
+
       If this is NOT a receipt for a physical product (e.g., subscription, service, digital download, newsletter, course announcement, etc.), return: {"is_receipt": false}
-      
+
       If this IS a receipt for a physical product, extract the following information and return a JSON object:
       {
         "is_receipt": true,
@@ -48,10 +48,10 @@ class AiService
         "return_policy_days": number (return deadline in days, if mentioned),
         "return_deadline": "YYYY-MM-DD format" (specific return deadline date, if mentioned),
       }
-      
-      IMPORTANT: Accept ANY physical product purchase receipt, even if warranty/return info is missing. 
+
+      IMPORTANT: Accept ANY physical product purchase receipt, even if warranty/return info is missing.#{' '}
       Default to 12 months warranty if not specified. Use the email date as purchase date if not specified.
-      
+
       Email content:
       #{email_content[0..2000]}...
     PROMPT
@@ -64,20 +64,20 @@ class AiService
 
     response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
     Rails.logger.debug "🤖 AI Response: #{response_text}"
-    
+
     # Clean up markdown code blocks if present
-    response_text = response_text.gsub(/```json\s*/, '').gsub(/```\s*$/, '').strip
-    
+    response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
+
     result = JSON.parse(response_text)
     Rails.logger.info "🤖 AI Analysis Result: #{result.inspect}"
-    
+
     # Only return data if AI confirms this is a receipt
     if result["is_receipt"] == true
       Rails.logger.info "✅ AI confirmed this is a receipt"
-      return result
+      result
     else
       Rails.logger.info "❌ AI determined this is not a receipt"
-      return nil
+      nil
     end
   rescue => e
     Rails.logger.error "💥 AI extraction failed: #{e.message}"
@@ -96,10 +96,10 @@ class AiService
         "exclusions": "what's not covered",
         "return_policy_days": number,
       }
-      
+
       Product: #{product_name}
       Merchant: #{merchant || "unknown"}
-      
+
       Be conservative and only include information you're confident about.
     PROMPT
 
@@ -108,10 +108,10 @@ class AiService
     })
 
     response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-    
+
     # Clean up markdown code blocks if present
-    response_text = response_text.gsub(/```json\s*/, '').gsub(/```\s*$/, '').strip
-    
+    response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
+
     JSON.parse(response_text)
   rescue => e
     Rails.logger.error "AI warranty lookup failed: #{e.message}"
@@ -128,7 +128,7 @@ class AiService
         "reasoning": "explanation of decision",
         "recommended_action": "what the user should do",
       }
-      
+
       Product: #{product_name}
       Issue: #{issue_description}
       Warranty Terms: #{warranty_terms}
@@ -139,14 +139,13 @@ class AiService
     })
 
     response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-    
+
     # Clean up markdown code blocks if present
-    response_text = response_text.gsub(/```json\s*/, '').gsub(/```\s*$/, '').strip
-    
+    response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
+
     JSON.parse(response_text)
   rescue => e
     Rails.logger.error "AI warranty eligibility check failed: #{e.message}"
     nil
   end
-
 end

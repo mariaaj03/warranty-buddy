@@ -218,7 +218,7 @@ RSpec.describe MerchantParsers::GenericParser do
     it 'returns nil when parsing fails' do
       allow(EmailOrderParser).to receive(:new)
         .and_return(double(parse: nil))
-      
+
       result = described_class.parse('', '')
       expect(result).to be_nil
     end

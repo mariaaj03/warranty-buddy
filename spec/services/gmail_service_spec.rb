@@ -27,7 +27,7 @@ RSpec.describe GmailService do
     end
 
     before do
-      allow(fetcher).to receive(:list_order_messages).and_return([message])
+      allow(fetcher).to receive(:list_order_messages).and_return([ message ])
       allow(fetcher).to receive(:get_message).and_return(message)
       allow(fetcher).to receive(:extract_html_from_message).and_return('<html>Order details</html>')
       allow(fetcher).to receive(:extract_text_from_message).and_return('Order details')
@@ -147,18 +147,18 @@ RSpec.describe GmailService do
     before do
       allow(fetcher).to receive(:get_attachment).and_return(attachment_data)
       allow(receipt_processor).to receive(:process_pdf)
-        .and_return({ merchant: 'Amazon', line_items: [{ name: 'Test Product' }] })
+        .and_return({ merchant: 'Amazon', line_items: [ { name: 'Test Product' } ] })
     end
 
     it 'processes PDF attachments' do
-      result = service.send(:process_attachments, [attachment], 'msg123', 'user123')
+      result = service.send(:process_attachments, [ attachment ], 'msg123', 'user123')
       expect(result).to be_an(Array)
       expect(result.first[:merchant]).to eq('Amazon')
     end
 
     it 'handles attachment processing errors' do
       allow(fetcher).to receive(:get_attachment).and_raise(StandardError)
-      result = service.send(:process_attachments, [attachment], 'msg123', 'user123')
+      result = service.send(:process_attachments, [ attachment ], 'msg123', 'user123')
       expect(result).to eq([])
     end
   end
