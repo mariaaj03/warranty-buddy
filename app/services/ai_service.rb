@@ -61,7 +61,6 @@ class AiService
         "warranty_type": "manufacturer/merchant/extended" (only if mentioned, otherwise null),
         "return_policy_days": number (return deadline in days, if mentioned),
         "return_deadline": "YYYY-MM-DD format" (specific return deadline date, if mentioned),
-        "confidence": 0.0-1.0 (how confident you are this is a valid receipt)
       }
       
       IMPORTANT: Accept ANY physical product purchase receipt, even if warranty/return info is missing. 
@@ -106,7 +105,13 @@ class AiService
     Rails.logger.info "🔍 AI Service: Looking up warranty info for '#{product_name}' from #{merchant}"
 
     prompt = <<~PROMPT
-      You are a warranty information expert. Your task is to find the ACTUAL WARRANTY PERIOD for this specific product.
+      Look up warranty information for this product. Return a JSON object with:
+      {
+        "standard_warranty_months": number,
+        "warranty_terms": "brief description of what's covered",
+        "exclusions": "what's not covered",
+        "return_policy_days": number,
+      }
       
       Product: #{product_name}
       Merchant: #{merchant || "unknown"}
@@ -179,7 +184,6 @@ class AiService
         "is_covered": true/false,
         "reasoning": "explanation of decision",
         "recommended_action": "what the user should do",
-        "confidence": 0.0-1.0
       }
       
       Product: #{product_name}
