@@ -43,6 +43,7 @@ Before running this application, ensure you have the following installed:
 - PostgreSQL 14 or higher
 - Bundler gem
 - Node.js (for asset compilation)
+- Tesseract
 
 ## Setup Instructions
 
@@ -57,6 +58,7 @@ cd warranty-buddy/warranty-buddy
 
 ```bash
 bundle install
+brew install tesseract
 ```
 
 ### 3. Configure Credentials
