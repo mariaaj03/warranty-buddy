@@ -110,28 +110,45 @@ class GmailService
     product_name = primary_item&.dig(:name)
     
     if product_name.blank? && order_number.present?
-      Rails.logger.info "🔍 No product name found in line items, trying AI extraction for order #{order_number}"
+      Rails.logger.info "🔍 No product name found in line items for order #{order_number}, trying extraction methods..."
       
-      email_text = [text_content, html_content].compact.join("\n")
-      if email_text.present? && email_text.length > 50
-        begin
-          ai_service = AiService.new
-          ai_result = ai_service.extract_receipt_info(email_text[0..3000])
-          if ai_result && ai_result["product_name"].present?
-            product_name = ai_result["product_name"]
-            Rails.logger.info "✅ AI extracted product name: #{product_name}"
-          end
-        rescue => e
-          Rails.logger.warn "⚠️ AI extraction failed: #{e.message}"
-        end
+      if product_name.blank? && subject.present?
+        product_name = extract_product_name_from_subject_line(subject, order_number)
+        Rails.logger.info "📝 Subject extraction result: #{product_name.inspect}" if product_name.present?
       end
       
       if product_name.blank?
         product_name = extract_product_name_from_email_content(html_content, text_content, subject)
+        Rails.logger.info "📧 Email content extraction result: #{product_name.inspect}" if product_name.present?
+      end
+      
+      if product_name.blank?
+        email_text = [text_content, html_content].compact.join("\n")
+        if email_text.present? && email_text.length > 50
+          Rails.logger.info "🤖 Trying AI extraction (Gemini API) for order #{order_number}..."
+          begin
+            ai_service = AiService.new
+            if ai_service.instance_variable_get(:@client)
+              ai_result = ai_service.extract_receipt_info(email_text[0..3000])
+              if ai_result && ai_result["product_name"].present?
+                product_name = ai_result["product_name"]
+                Rails.logger.info "✅ AI (Gemini) extracted product name: #{product_name}"
+              else
+                Rails.logger.warn "⚠️ AI returned no product name"
+              end
+            else
+              Rails.logger.warn "⚠️ AI service not configured (missing Gemini API key)"
+            end
+          rescue => e
+            Rails.logger.warn "⚠️ AI extraction failed: #{e.message}"
+            Rails.logger.warn e.backtrace.first(3).join("\n")
+          end
+        end
       end
       
       if product_name.blank?
         product_name = "Order #{order_number}"
+        Rails.logger.info "❌ Using fallback product name: #{product_name}"
       end
     end
     
@@ -249,6 +266,53 @@ class GmailService
     require "nokogiri"
     doc = Nokogiri::HTML(html)
     doc.text
+  end
+
+  def extract_product_name_from_subject_line(subject, order_number = nil)
+    return nil if subject.blank?
+
+    promotional_keywords = [
+      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
+      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i,
+      /newsletter/i, /marketing/i, /refer a friend/i, /save.*off/i
+    ]
+    
+    return nil if promotional_keywords.any? { |pattern| subject.match?(pattern) }
+    return nil if subject.match?(/^(select|shop|buy|save|deal|offer|special|why not|tonight|last day)/i)
+
+    patterns = [
+      /(?:sold|bought|purchased|ordered|booked)\s+\d+\s+(?:tickets?|items?)\s+for\s+(.+?)(?:\s+[-–]\s+Order|$)/i,
+      /(?:tickets?|items?)\s+for\s+(.+?)(?:\s+[-–]\s+Order|$)/i,
+      /(.+?)\s+tickets?(?:\s+[-–]\s+Order|$)/i,
+      /(.+?)\s+[-–]\s+Order\s*#/i,
+      /(.+?)\s+Confirmation/i,
+      /(.+?)\s+Parking\s+(?:Pass|Confirmation)/i,
+      /receipt for\s+(.+?)(?:\s+[-–]|$)/i,
+      /order\s+for\s+(.+?)(?:\s+[-–]|$)/i,
+      /your order of\s+(.+?)(?:\s+[-–]|$)/i,
+      /purchase\s+of\s+(.+?)(?:\s+[-–]|$)/i,
+      /(.+?)\s+from\s+(.+?)(?:\s+[-–]\s+Order|$)/i
+    ]
+
+    patterns.each do |pattern|
+      if match = subject.match(pattern)
+        candidate = match[1]&.strip
+        next if candidate.blank?
+        next if candidate.length < 5 || candidate.length > 100
+        next if promotional_keywords.any? { |pat| candidate.match?(pat) }
+        next if candidate.match?(/^(order|receipt|confirmation|parking|ticket)$/i)
+        
+        candidate = candidate.gsub(/\s*[-–]\s*Order\s*#.*$/i, "").strip
+        candidate = candidate.gsub(/\s*for\s+your\s+.*$/i, "").strip
+        
+        if candidate.length >= 5 && candidate.length <= 80
+          Rails.logger.info "✅ Extracted from subject: #{candidate}"
+          return candidate
+        end
+      end
+    end
+
+    nil
   end
 
   def extract_product_name_from_subject(subject)
