@@ -1,30 +1,20 @@
-begin
-  require "pdf-reader"
-  require "rtesseract"
-rescue LoadError => e
-  Rails.logger.warn "PDF/OCR libraries not available: #{e.message}"
-end
 require "tempfile"
 
 class ReceiptProcessor
   def initialize
     @temp_files = []
+    @vision_service = GoogleVisionService.new
+    @ai_service = AiService.new
   end
 
   def process_pdf(pdf_data)
     return nil unless pdf_data.present?
-    return nil unless defined?(PDF::Reader)
 
     begin
-      temp_file = create_temp_file(pdf_data, ".pdf")
-      reader = PDF::Reader.new(temp_file.path)
+      text = @vision_service.extract_text_from_pdf(pdf_data)
+      return nil if text.blank?
 
-      text = ""
-      reader.pages.each do |page|
-        text += page.text + "\n"
-      end
-
-      parse_receipt_text(text)
+      parse_receipt_with_ai(text)
     rescue => e
       Rails.logger.error "PDF processing failed: #{e.message}"
       nil
@@ -33,18 +23,12 @@ class ReceiptProcessor
 
   def process_image(image_data, filename = nil)
     return nil unless image_data.present?
-    return nil unless defined?(RTesseract)
 
     begin
-      # Determine file extension
-      ext = determine_image_extension(filename) || ".jpg"
-      temp_file = create_temp_file(image_data, ext)
+      text = @vision_service.extract_text_from_image(image_data)
+      return nil if text.blank?
 
-      # Use OCR to extract text
-      image = RTesseract.new(temp_file.path)
-      text = image.to_s
-
-      parse_receipt_text(text)
+      parse_receipt_with_ai(text)
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
       nil
@@ -80,6 +64,28 @@ class ReceiptProcessor
 
     # Try to determine from content type or default to jpg
     ".jpg"
+  end
+
+  def parse_receipt_with_ai(text)
+    return nil if text.blank?
+
+    ai_result = @ai_service.extract_receipt_info(text)
+    
+    if ai_result && ai_result["is_receipt"] == true
+      {
+        merchant: ai_result["merchant"],
+        purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+        line_items: [{ name: ai_result["product_name"], quantity: 1, price: nil }],
+        total_amount: nil,
+        order_number: nil,
+        warranty_length_months: ai_result["warranty_length_months"],
+        warranty_type: ai_result["warranty_type"],
+        return_policy_days: ai_result["return_policy_days"],
+        return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+      }
+    else
+      parse_receipt_text(text)
+    end
   end
 
   def parse_receipt_text(text)

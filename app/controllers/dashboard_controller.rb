@@ -42,38 +42,68 @@ class DashboardController < ApplicationController
 
 
   def upload
-    if params[:product].blank?
-      respond_to do |format|
-        format.html { flash[:alert] = "Missing product"; redirect_to dashboard_path }
-        format.json { head :bad_request }
+    receipt_data = nil
+
+    if params[:receipt_file].present?
+      uploaded_file = params[:receipt_file]
+      file_data = uploaded_file.read
+      file_extension = File.extname(uploaded_file.original_filename).downcase
+
+      receipt_processor = ReceiptProcessor.new
+      begin
+        if file_extension == ".pdf"
+          receipt_data = receipt_processor.process_pdf(file_data)
+        elsif %w[.jpg .jpeg .png .gif .bmp .tiff].include?(file_extension)
+          receipt_data = receipt_processor.process_image(file_data, uploaded_file.original_filename)
+        end
+      ensure
+        receipt_processor.cleanup
       end
+
+      if receipt_data.nil?
+        flash[:alert] = "Could not extract information from receipt. Please enter details manually."
+      end
+    end
+
+    product_name = params[:product].presence || receipt_data&.dig(:line_items)&.first&.dig(:name)
+    merchant = params[:merchant].presence || receipt_data&.dig(:merchant)
+    
+    if product_name.blank?
+      redirect_to dashboard_path, alert: "Product name is required"
       return
     end
 
-    unless @gmail_connected
-      redirect_to dashboard_path, alert: "Please connect your Gmail account first"
-      return
+    purchase_date = if params[:purchase_date].present?
+      begin
+        Date.parse(params[:purchase_date])
+      rescue ArgumentError, TypeError
+        receipt_data&.dig(:purchase_date) || Date.today
+      end
+    else
+      receipt_data&.dig(:purchase_date) || Date.today
     end
 
-    purchase_date = begin
-      Date.parse(params[:purchase_date])
-    rescue ArgumentError, TypeError
-      Date.today
+    warranty_months = if params[:warranty_length].present?
+      months = params[:warranty_length].to_i
+      months > 0 ? months : nil
+    else
+      receipt_data&.dig(:warranty_length_months)
     end
-
-    warranty_months = params[:warranty_length].presence
-    warranty_months = warranty_months.to_i if warranty_months
-    warranty_months = 0 if warranty_months && warranty_months.negative?
+    warranty_months ||= 12
 
     current_user.products.create!(
-      product_name: params[:product],
-      merchant: params[:merchant].presence || "",
+      product_name: product_name,
+      merchant: merchant || "",
       purchase_date: purchase_date,
       warranty_months: warranty_months,
-      issue_description: params[:issue_description]
+      warranty_type: receipt_data&.dig(:warranty_type),
+      return_policy_days: receipt_data&.dig(:return_policy_days),
+      return_deadline: receipt_data&.dig(:return_deadline),
+      issue_description: params[:issue_description],
+      source: receipt_data ? "receipt_upload" : "manual"
     )
 
-    redirect_to dashboard_path
+    redirect_to dashboard_path, notice: receipt_data ? "Receipt processed and warranty added!" : "Warranty added successfully!"
   end
 
   def api_warranties

@@ -586,15 +586,21 @@
     <div class="add-product-section">
       <details>
         <summary>➕ Add a Product Warranty</summary>
-        <form action="/upload" method="post" class="add-product-form">
+        <form action="/upload" method="post" class="add-product-form" enctype="multipart/form-data">
           <%= csrf_meta_tags %>
           <div class="form-field">
+            <label for="receipt_file">Upload Receipt (optional)</label>
+            <input type="file" id="receipt_file" name="receipt_file" accept="image/*,.pdf" />
+            <small style="color: #6b7280; font-size: 0.875rem;">Upload a receipt image or PDF to automatically extract product details</small>
+          </div>
+          <div class="form-field">
             <label for="product">Product Name</label>
-            <input type="text" id="product" name="product" required placeholder="e.g., iPhone 15 Pro" />
+            <input type="text" id="product" name="product" placeholder="e.g., iPhone 15 Pro (will be auto-filled from receipt)" />
+            <small style="color: #6b7280; font-size: 0.875rem;">Required if not uploading a receipt</small>
           </div>
           <div class="form-field">
             <label for="merchant">Merchant (optional)</label>
-            <input type="text" id="merchant" name="merchant" placeholder="e.g., Apple Store" />
+            <input type="text" id="merchant" name="merchant" placeholder="e.g., Apple Store (will be auto-filled from receipt)" />
           </div>
           <div class="form-field">
             <label for="purchase_date">Purchase Date</label>
