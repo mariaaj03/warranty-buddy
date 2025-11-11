@@ -724,24 +724,31 @@
     });
     
     function editWarranty(warrantyId, row) {
+      // Get data from data attributes or parse from row
       const cells = row.querySelectorAll('td');
       const productName = cells[0].querySelector('.product-name').textContent.trim();
       const merchant = cells[3].textContent.trim().replace('—', '');
-      const purchaseDateText = cells[0].textContent.match(/Purchased (.+?) •/);
-      const purchaseDate = purchaseDateText ? purchaseDateText[1] : '';
-      const warrantyMonths = cells[0].textContent.match(/(\d+) months/);
-      const months = warrantyMonths ? warrantyMonths[1] : '';
       
-      // Try to parse date
+      // Parse purchase date and warranty months from the product cell
+      const productCellText = cells[0].textContent;
+      const purchaseDateMatch = productCellText.match(/Purchased (.+?) •/);
+      const warrantyMatch = productCellText.match(/(\d+) months/);
+      
       let dateValue = '';
-      if (purchaseDate) {
+      if (purchaseDateMatch) {
         try {
-          const parsed = new Date(purchaseDate);
+          // Parse date like "Dec 15, 2025"
+          const dateStr = purchaseDateMatch[1].trim();
+          const parsed = new Date(dateStr);
           if (!isNaN(parsed)) {
             dateValue = parsed.toISOString().split('T')[0];
           }
-        } catch(e) {}
+        } catch(e) {
+          console.error('Date parse error:', e);
+        }
       }
+      
+      const months = warrantyMatch ? warrantyMatch[1] : '12';
       
       document.getElementById('editWarrantyId').value = warrantyId;
       document.getElementById('editProductName').value = productName;
