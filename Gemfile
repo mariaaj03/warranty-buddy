@@ -49,6 +49,9 @@ gem "omniauth-rails_csrf_protection"
 # Google API client (needed for Gmail integration)
 gem "google-api-client"
 
+# AI and search
+gem "gemini-ai", "~> 4.3.0"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
@@ -68,7 +71,6 @@ group :development, :test do
 
   gem "attr_encrypted"
   gem "sidekiq"
-  gem "gemini-ai", "~> 4.3.0"
   gem "nokogiri"
   gem "mail"
   gem "pdf-reader"
