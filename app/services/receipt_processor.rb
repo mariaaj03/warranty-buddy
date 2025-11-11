@@ -14,7 +14,7 @@ class ReceiptProcessor
       text = @vision_service.extract_text_from_pdf(pdf_data)
       return nil if text.blank?
 
-      parse_receipt_with_ai(text)
+      parse_receipt_text_first(text)
     rescue => e
       Rails.logger.error "PDF processing failed: #{e.message}"
       nil
@@ -32,7 +32,7 @@ class ReceiptProcessor
       end
 
       Rails.logger.info "Extracted #{text.length} characters from image"
-      result = parse_receipt_with_ai(text)
+      result = parse_receipt_text_first(text)
       Rails.logger.info "Parsed receipt data: #{result.inspect}" if result
       result
     rescue => e
@@ -73,31 +73,39 @@ class ReceiptProcessor
     ".jpg"
   end
 
-  def parse_receipt_with_ai(text)
+  def parse_receipt_text_first(text)
     return nil if text.blank?
 
-    ai_result = @ai_service.extract_receipt_info(text)
+    result = parse_receipt_text(text)
     
-    if ai_result && ai_result["is_receipt"] == true
-      product_name = ai_result["product_name"]
-      {
-        product_name: product_name,
-        merchant: ai_result["merchant"],
-        purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
-        line_items: [{ name: product_name, quantity: 1, price: nil }],
-        total_amount: nil,
-        order_number: nil,
-        warranty_length_months: ai_result["warranty_length_months"],
-        warranty_type: ai_result["warranty_type"],
-        return_policy_days: ai_result["return_policy_days"],
-        return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
-      }
-    else
-      fallback_data = parse_receipt_text(text)
-      if fallback_data && fallback_data[:line_items]&.any?
-        fallback_data[:product_name] = fallback_data[:line_items].first[:name]
+    if result && result[:line_items]&.any?
+      result[:product_name] = result[:line_items].first[:name]
+      return result
+    end
+
+    begin
+      ai_result = @ai_service.extract_receipt_info(text)
+      
+      if ai_result && ai_result["is_receipt"] == true
+        product_name = ai_result["product_name"]
+        {
+          product_name: product_name,
+          merchant: ai_result["merchant"],
+          purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+          line_items: [{ name: product_name, quantity: 1, price: nil }],
+          total_amount: nil,
+          order_number: nil,
+          warranty_length_months: ai_result["warranty_length_months"],
+          warranty_type: ai_result["warranty_type"],
+          return_policy_days: ai_result["return_policy_days"],
+          return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+        }
+      else
+        result
       end
-      fallback_data
+    rescue => e
+      Rails.logger.warn "AI parsing failed (rate limit?): #{e.message}"
+      result
     end
   end
 
@@ -150,20 +158,40 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    # Look for date patterns
+    lines = text.split(/\n|\r\n/).map(&:strip).first(20)
+    
     date_patterns = [
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
-      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
+      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
+      /(?:date|purchased?|order\s+date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2})\b/
     ]
+
+    lines.each do |line|
+      date_patterns.each do |pattern|
+        if match = line.match(pattern)
+          date_str = match[1]
+          begin
+            parsed_date = Date.parse(date_str)
+            if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+              return parsed_date
+            end
+          rescue ArgumentError
+          end
+        end
+      end
+    end
 
     date_patterns.each do |pattern|
       if match = text.match(pattern)
         begin
-          return Date.parse(match[1])
+          parsed_date = Date.parse(match[1])
+          if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+            return parsed_date
+          end
         rescue ArgumentError
-          # Try next pattern
         end
       end
     end
@@ -173,38 +201,66 @@ class ReceiptProcessor
 
   def extract_items_from_receipt(text)
     items = []
+    lines = text.split(/\n|\r\n/).map(&:strip).reject(&:blank?)
 
-    # Look for line item patterns
-    line_patterns = [
-      /(\d+)\s+(.{3,80}?)\s+([0-9\.,]+)/,
-      /(.{3,80}?)\s+([0-9\.,]+)/
-    ]
+    lines.each_with_index do |line, index|
+      next if line.length < 3
+      
+      email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+      next if line.match?(email_pattern)
+      
+      next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you)/i)
+      
+      price_match = line.match(/\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+      next unless price_match
+      
+      price = parse_price(price_match[1])
+      next unless price && price > 0
+      
+      product_name = line.gsub(/\$?\s*[0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?/, "").strip
+      product_name = product_name.gsub(/\d+\s*x?\s*/i, "").strip
+      
+      next if product_name.length < 3
+      next if product_name.match?(/^[0-9\s\-]+$/)
+      
+      items << {
+        name: product_name,
+        quantity: 1,
+        price: price
+      }
+    end
 
-    line_patterns.each do |pattern|
-      text.scan(pattern).each do |match|
-        if match.length == 3
-          # Pattern with quantity
-          qty = match[0].to_i
-          name = match[1].strip
-          price = parse_price(match[2])
-        else
-          # Pattern without quantity
-          qty = 1
-          name = match[0].strip
-          price = parse_price(match[1])
+    if items.empty?
+      line_patterns = [
+        /([A-Z][a-zA-Z\s]{2,50}?)\s+\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/,
+        /(\d+)\s+x\s+([A-Z][a-zA-Z\s]{2,50}?)\s+\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/
+      ]
+
+      line_patterns.each do |pattern|
+        text.scan(pattern).each do |match|
+          if match.length == 3
+            qty = match[0].to_i
+            name = match[1].strip
+            price = parse_price(match[2])
+          else
+            qty = 1
+            name = match[0].strip
+            price = parse_price(match[1])
+          end
+
+          next if name.length < 3 || price.nil? || name.match?(/@/)
+          next if name.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store)/i)
+
+          items << {
+            name: name,
+            quantity: qty,
+            price: price
+          }
         end
-
-        next if name.length < 3 || price.nil?
-
-        items << {
-          name: name,
-          quantity: qty,
-          price: price
-        }
       end
     end
 
-    items.uniq { |item| item[:name] }
+    items.uniq { |item| item[:name] }.first(5)
   end
 
   def extract_total_from_receipt(text)
