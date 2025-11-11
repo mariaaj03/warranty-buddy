@@ -85,6 +85,8 @@ class GoogleCalendarService
   end
 
   def create_event_for_product(product, reminder_days)
+    reminders_list = build_reminders(product, reminder_days)
+    
     event = Google::Apis::CalendarV3::Event.new(
       summary: "Warranty expires: #{product.product_name}",
       description: build_description(product),
@@ -95,12 +97,15 @@ class GoogleCalendarService
       end: Google::Apis::CalendarV3::EventDateTime.new(
         date: (product.expiry_date + 1.day).strftime("%Y-%m-%d"),
         time_zone: "America/New_York"
-      ),
-      reminders: Google::Apis::CalendarV3::Event::Reminders.new(
-        use_default: false,
-        overrides: build_reminders(product, reminder_days)
       )
     )
+
+    if reminders_list.any?
+      event.reminders = Google::Apis::CalendarV3::Event::Reminders.new(
+        use_default: false,
+        overrides: reminders_list
+      )
+    end
 
     event
   end
@@ -118,18 +123,11 @@ class GoogleCalendarService
   def build_reminders(product, reminder_days)
     reminders = []
     
-    if reminder_days.include?(0)
+    reminder_days.each do |days|
+      minutes = days == 0 ? 0 : days * 24 * 60
       reminders << Google::Apis::CalendarV3::EventReminder.new(
         method: "email",
-        minutes: 0
-      )
-    end
-
-    reminder_days.select { |d| d > 0 }.each do |days|
-      minutes_before = days * 24 * 60
-      reminders << Google::Apis::CalendarV3::EventReminder.new(
-        method: "email",
-        minutes: minutes_before
+        minutes: minutes
       )
     end
 
