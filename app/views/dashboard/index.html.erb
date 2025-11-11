@@ -707,7 +707,7 @@
       
       <div class="ical-reminders-section" style="margin-top: 1rem;">
         <span class="ical-reminders-label">iCal Reminders:</span>
-        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false }, html: { style: "display: contents;" } do |f| %>
+        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false } do |f| %>
           <div class="ical-reminders-options">
             <label>
               <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:reminders]).include?("0") %> />
@@ -735,22 +735,22 @@
       <% if current_user.gmail_connected? %>
         <div class="ical-reminders-section" style="margin-top: 1rem;">
           <span class="ical-reminders-label">Google Calendar Reminders:</span>
-          <%= form_with url: export_to_google_calendar_products_path, method: :post, local: true, data: { turbo: false }, html: { style: "display: contents;" } do |f| %>
+          <%= form_with url: export_to_google_calendar_products_path, method: :post, local: true, data: { turbo: false } do |f| %>
             <div class="ical-reminders-options">
               <label>
-                <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:google_reminders]).include?("0") %> />
+                <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:reminders]).include?("0") %> />
                 same day
               </label>
               <label>
-                <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:google_reminders]).include?("1") %> />
+                <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:reminders]).include?("1") %> />
                 1 day
               </label>
               <label>
-                <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:google_reminders]).include?("7") %> />
+                <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:reminders]).include?("7") %> />
                 7 days
               </label>
               <label>
-                <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:google_reminders]).include?("30") %> />
+                <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:reminders]).include?("30") %> />
                 30 days
               </label>
               <button type="submit" class="export-btn export-btn--google-cal" style="margin-left: auto;">
