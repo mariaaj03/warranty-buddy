@@ -110,45 +110,48 @@ class ReceiptProcessor
       "Lowes"
     ]
 
-    common_merchants.each do |merchant_pattern|
-      if text.match?(/#{merchant_pattern}/i)
-        # Return the cleaned up name without regex escapes
-        return merchant_pattern.gsub(/\\s\+/, " ")
+    def extract_merchant_from_receipt(text)
+      # Look for store names in the text
+      common_merchants = %w[
+        Amazon Best\s+Buy Walmart Target Costco Newegg 
+        Apple Microsoft Dyson Samsung Dell HP Sony
+        Home\s+Depot Lowes Nike Adidas
+      ]
+      
+      common_merchants.each do |merchant|
+        if text.match?(/#{merchant}/i)
+          return merchant.gsub(/\s+/, ' ')
+        end
       end
+    
+      # Look for patterns
+      if match = text.match(/thank you for shopping at\s+([^\n\r]{2,50})/i)
+        return match[1].strip
+      end
+    
+      if match = text.match(/store[:\s]+([^\n\r]{2,50})/i)
+        return match[1].strip
+      end
+    
+      nil
     end
-
-    # Look for patterns like "Thank you for shopping at [Store]"
-    if match = text.match(/thank you for shopping at\s+([^\n\r]{2,50})/i)
-      return match[1].strip
-    end
-
-    # Look for patterns like "Store: [Name]"
-    if match = text.match(/store[:\s]+([^\n\r]{2,50})/i)
-      return match[1].strip
-    end
-
-    nil
-  end
-
-  def extract_date_from_receipt(text)
-    # Look for date patterns
-    date_patterns = [
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
-      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i
-    ]
-
+    
     date_patterns.each do |pattern|
-      if match = text.match(pattern)
+      matches = text.scan(pattern)
+      matches.each do |match|
+        date_str = match.is_a?(Array) ? match[0] : match
         begin
-          return Date.parse(match[1])
+          parsed_date = Date.parse(date_str)
+          # Sanity check: date should be within reasonable range
+          if parsed_date.year >= 2000 && parsed_date.year <= Date.today.year + 10
+            return parsed_date
+          end
         rescue ArgumentError
-          # Try next pattern
+          # Try next match
         end
       end
     end
-
+  
     nil
   end
 
