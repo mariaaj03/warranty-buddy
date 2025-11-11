@@ -444,6 +444,17 @@
       box-shadow: 0 4px 12px rgba(34, 142, 62, 0.3);
     }
 
+    .export-btn--google-cal {
+      background: #ea4335;
+      color: #ffffff;
+    }
+
+    .export-btn--google-cal:hover {
+      background: #c5221f;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(234, 67, 53, 0.3);
+    }
+
     .ical-reminders-section {
       display: flex;
       align-items: center;
@@ -684,6 +695,14 @@
             📅 Export iCal
           </button>
         <% end %>
+
+        <% if current_user.gmail_connected? %>
+          <%= form_with url: export_to_google_calendar_products_path, method: :post, local: true, data: { turbo: false } do |f| %>
+            <button type="submit" class="export-btn export-btn--google-cal">
+              📆 Export to Google Calendar
+            </button>
+          <% end %>
+        <% end %>
       </div>
       
       <div class="ical-reminders-section" style="margin-top: 1rem;">
@@ -712,6 +731,35 @@
           </div>
         <% end %>
       </div>
+
+      <% if current_user.gmail_connected? %>
+        <div class="ical-reminders-section" style="margin-top: 1rem;">
+          <span class="ical-reminders-label">Google Calendar Reminders:</span>
+          <%= form_with url: export_to_google_calendar_products_path, method: :post, local: true, data: { turbo: false }, html: { style: "display: contents;" } do |f| %>
+            <div class="ical-reminders-options">
+              <label>
+                <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:google_reminders]).include?("0") %> />
+                same day
+              </label>
+              <label>
+                <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:google_reminders]).include?("1") %> />
+                1 day
+              </label>
+              <label>
+                <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:google_reminders]).include?("7") %> />
+                7 days
+              </label>
+              <label>
+                <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:google_reminders]).include?("30") %> />
+                30 days
+              </label>
+              <button type="submit" class="export-btn export-btn--google-cal" style="margin-left: auto;">
+                📆 Export to Google Calendar with Reminders
+              </button>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
     </div>
   </div>
 

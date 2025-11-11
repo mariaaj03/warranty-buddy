@@ -18,6 +18,7 @@ Rails.application.routes.draw do
     collection do
       get :export                  # CSV
       get :calendar, defaults: { format: :ics }  # iCal
+      post :export_to_google_calendar  # Google Calendar
     end
   end
 

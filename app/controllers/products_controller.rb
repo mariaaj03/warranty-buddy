@@ -92,4 +92,39 @@ class ProductsController < ApplicationController
         headers["Content-Disposition"] = 'attachment; filename="warranty_buddy.ics"'
         render plain: cal.to_ical
       end
+
+  def export_to_google_calendar
+    unless current_user.gmail_connected?
+      redirect_to dashboard_path, alert: "Please connect your Google account first"
+      return
+    end
+
+    products = current_user.products.to_a.select { |p| p.expiry_date.present? }
+
+    if products.empty?
+      redirect_to dashboard_path, alert: "No warranties with expiry dates found"
+      return
+    end
+
+    # Parse reminder days
+    reminder_days = Array(params[:reminders])
+                      .map { |s| Integer(s) rescue nil }
+                      .compact
+                      .select { |n| n >= 0 }
+                      .uniq
+                      .sort
+
+    calendar_service = GoogleCalendarService.new(current_user)
+    result = calendar_service.export_warranties(products, reminder_days: reminder_days)
+
+    if result[:success]
+      if result[:errors].any?
+        redirect_to dashboard_path, notice: "Exported #{result[:created]} warranty(ies) to Google Calendar. #{result[:errors].length} error(s) occurred."
+      else
+        redirect_to dashboard_path, notice: "Successfully exported #{result[:created]} warranty(ies) to Google Calendar!"
+      end
+    else
+      redirect_to dashboard_path, alert: "Failed to export to Google Calendar: #{result[:error]}"
+    end
+  end
 end
