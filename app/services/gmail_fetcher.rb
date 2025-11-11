@@ -14,11 +14,9 @@ class GmailFetcher
     @service
   end
 
-  # List messages matching specific order/receipt queries
   def list_order_messages(user_id = "me", max_results = 100)
     Rails.logger.info "🔍 Fetching order messages for user: #{user_id}"
 
-    # Focused queries for order confirmations
     queries = [
       "in:inbox subject:(order OR receipt OR invoice OR confirmation) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com OR newegg.com OR bhphotovideo.com) newer_than:1y",
       "in:inbox subject:(shipped OR delivered OR tracking) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com) newer_than:1y",
@@ -33,7 +31,6 @@ class GmailFetcher
       break if all_messages.length >= max_results
     end
 
-    # Remove duplicates
     unique_messages = all_messages.uniq { |msg| msg.id }
     Rails.logger.info "📊 Found #{unique_messages.length} unique order messages"
     unique_messages.first(max_results)

@@ -11,6 +11,10 @@ class GoogleCalendarService
   def export_warranties(products, reminder_days: [])
     return { success: false, error: "Not authenticated" } unless @user.gmail_token.present?
 
+    unless @service.authorization
+      return { success: false, error: "Failed to authenticate with Google Calendar. Please sign out and sign in again to grant calendar permissions." }
+    end
+
     begin
       created_count = 0
       errors = []
@@ -19,15 +23,18 @@ class GoogleCalendarService
         next unless product.expiry_date
 
         begin
-          # Create main expiry event
           event = create_event_for_product(product, reminder_days)
           created_event = @service.insert_event("primary", event)
           created_count += 1
-
-          Rails.logger.info "✅ Created calendar event for #{product.product_name}: #{created_event.id}"
+          Rails.logger.info "Created calendar event for #{product.product_name}: #{created_event.id}"
         rescue => e
-          Rails.logger.error "❌ Failed to create event for #{product.product_name}: #{e.message}"
-          errors << "#{product.product_name}: #{e.message}"
+          error_msg = e.message
+          if error_msg.include?("insufficient authentication scopes") || error_msg.include?("Request had insufficient authentication scopes")
+            error_msg = "Calendar permissions not granted. Please sign out and sign in again."
+          end
+          Rails.logger.error "Failed to create event for #{product.product_name}: #{error_msg}"
+          Rails.logger.error e.backtrace.join("\n")
+          errors << "#{product.product_name}: #{error_msg}"
         end
       end
 
@@ -37,7 +44,8 @@ class GoogleCalendarService
         errors: errors
       }
     rescue => e
-      Rails.logger.error "💥 Calendar export failed: #{e.message}"
+      Rails.logger.error "Calendar export failed: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
       { success: false, error: e.message }
     end
   end
@@ -53,7 +61,6 @@ class GoogleCalendarService
 
       return unless client_id.present? && client_secret.present?
 
-      # Create a credentials object
       credentials = Google::Auth::UserRefreshCredentials.new(
         client_id: client_id,
         client_secret: client_secret,
@@ -61,8 +68,7 @@ class GoogleCalendarService
         access_token: @user.gmail_token
       )
 
-      # Refresh token if needed
-      if credentials.expired? || credentials.expires_at.nil? || credentials.expires_at < Time.now
+      if credentials.expired? || credentials.expires_at.nil? || (credentials.expires_at && credentials.expires_at < Time.now)
         credentials.refresh!
         @user.update(
           gmail_token: credentials.access_token,
@@ -74,6 +80,7 @@ class GoogleCalendarService
     rescue => e
       Rails.logger.error "Failed to setup calendar authorization: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
+      @service.authorization = nil
     end
   end
 
@@ -111,22 +118,15 @@ class GoogleCalendarService
   def build_reminders(product, reminder_days)
     reminders = []
     
-    # Add same-day reminder if requested (at 9 AM on expiry date)
     if reminder_days.include?(0)
-      expiry_time = product.expiry_date.to_time
-      reminder_time = Time.new(expiry_time.year, expiry_time.month, expiry_time.day, 9, 0, 0, expiry_time.utc_offset)
-      minutes_before = ((expiry_time - reminder_time) / 60).to_i
-      
       reminders << Google::Apis::CalendarV3::EventReminder.new(
         method: "email",
-        minutes: [minutes_before, 0].max
+        minutes: 0
       )
     end
 
-    # Add other reminders (convert days to minutes)
     reminder_days.select { |d| d > 0 }.each do |days|
       minutes_before = days * 24 * 60
-      
       reminders << Google::Apis::CalendarV3::EventReminder.new(
         method: "email",
         minutes: minutes_before

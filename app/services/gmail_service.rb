@@ -12,7 +12,6 @@ class GmailService
     begin
       Rails.logger.info "🔍 Starting Gmail receipt parsing for user: #{user_id}"
 
-      # Get order messages using focused queries
       messages = @fetcher.list_order_messages(user_id, 50)
       Rails.logger.info "📊 Found #{messages.length} order messages"
 
@@ -25,18 +24,14 @@ class GmailService
           Rails.logger.info "📧 Processing message #{index + 1}/#{messages.length} (ID: #{message.id})"
           full_message = @fetcher.get_message(message.id, user_id)
 
-          # Extract headers
           subject = extract_header(full_message, "Subject") || ""
           from = extract_header(full_message, "From") || ""
           date_header = extract_header(full_message, "Date")
 
           Rails.logger.info "📧 Subject: '#{subject}' from #{from}"
 
-          # Extract content
           html_content = @fetcher.extract_html_from_message(full_message)
           text_content = @fetcher.extract_text_from_message(full_message)
-
-          # Parse the email
           parsed_receipt = parse_email_content(html_content, text_content, subject, from, date_header, full_message.id)
           processed_count += 1
 
@@ -48,7 +43,6 @@ class GmailService
             Rails.logger.info "❌ Not a valid receipt"
           end
 
-          # Process attachments if any
           attachments = @fetcher.extract_attachments(full_message)
           if attachments.any?
             Rails.logger.info "📎 Found #{attachments.length} attachments, processing..."

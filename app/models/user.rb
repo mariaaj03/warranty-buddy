@@ -1,6 +1,4 @@
 class User < ApplicationRecord
-  # Include default devise modules. Others available are:
-  # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
   devise :database_authenticatable, :registerable,
          :recoverable, :rememberable, :validatable,
          :omniauthable, omniauth_providers: [:google_oauth2]
@@ -16,7 +14,6 @@ class User < ApplicationRecord
       user.image = auth.info.image
       user.save
     else
-      # Update existing user info
       user.update(
         name: auth.info.name,
         image: auth.info.image

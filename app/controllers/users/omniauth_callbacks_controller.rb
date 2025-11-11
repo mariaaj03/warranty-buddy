@@ -4,7 +4,6 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
       @user = User.from_omniauth(request.env["omniauth.auth"])
 
       if @user.persisted?
-        # Store Gmail tokens
         auth = request.env["omniauth.auth"]
         @user.update(
           gmail_token: auth.credentials.token,

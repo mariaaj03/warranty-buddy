@@ -2,11 +2,8 @@ class ProductsController < ApplicationController
   before_action :authenticate_user!
   require "csv"
 
-  # Export all warranties for the current user as CSV
   def export
-    # Fetch warranties for the current user
     products = current_user.products.to_a.sort_by do |p|
-        # Sort by computed expiry_date, put nils at the end
         p.expiry_date || Date.new(3000, 1, 1)
       end
 
@@ -47,7 +44,6 @@ class ProductsController < ApplicationController
 
     products = current_user.products.to_a
 
-        # Keep 0 (same-day) AND positive offsets; dedupe & sort
         offsets = Array(params[:reminders])
                     .map { |s| Integer(s) rescue nil }
                     .compact
@@ -63,7 +59,6 @@ class ProductsController < ApplicationController
           next unless p.expiry_date
 
           cal.event do |e|
-            # Make these all-day events explicitly (DATE, not DATE-TIME)
             e.dtstart     = Icalendar::Values::Date.new(p.expiry_date)
             e.dtend       = Icalendar::Values::Date.new(p.expiry_date + 1.day)
             e.summary     = "Warranty expires: #{p.product_name}"
@@ -78,10 +73,9 @@ class ProductsController < ApplicationController
                     a.action      = "DISPLAY"
                     a.description = "Warranty expiring soon: #{p.product_name}"
 
-                    alert_day  = p.expiry_date - days # Date
+                    alert_day  = p.expiry_date - days
                     alert_time = tz.local(alert_day.year, alert_day.month, alert_day.day, 9, 0, 0)
 
-                    # Absolute trigger; serialize as local time with TZID to avoid DST/UTC surprises
                     a.trigger = Icalendar::Values::DateTime.new(alert_time, "TZID" => "America/New_York")
                 end
             end
@@ -106,7 +100,6 @@ class ProductsController < ApplicationController
       return
     end
 
-    # Parse reminder days
     reminder_days = Array(params[:reminders])
                       .map { |s| Integer(s) rescue nil }
                       .compact
