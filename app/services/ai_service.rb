@@ -142,6 +142,62 @@ class AiService
     nil
   end
 
+  def extract_receipt_info_from_image(image_base64)
+    return nil unless @client
+
+    Rails.logger.info "🤖 AI Service: Starting image receipt analysis"
+
+    prompt = <<~PROMPT
+      Analyze this receipt image and extract purchase/receipt information for a physical product.
+
+      Look for:
+      - Product names, descriptions, or SKUs
+      - Purchase amounts, prices, or totals
+      - Order numbers or confirmation numbers
+      - Merchant/store information
+      - Purchase date
+      - Warranty information (if mentioned)
+      - Return policy information (if mentioned)
+
+      If this is NOT a receipt for a physical product (e.g., subscription, service, digital download, etc.), return: {"is_receipt": false}
+
+      If this IS a receipt for a physical product, extract the following information and return a JSON object:
+      {
+        "is_receipt": true,
+        "product_name": "exact product name or description (required - extract the main product/item purchased)",
+        "merchant": "store/website/company name (required)",
+        "purchase_date": "YYYY-MM-DD format (required - extract from receipt)",
+        "warranty_length_months": number (only if explicitly mentioned, otherwise null),
+        "warranty_type": "manufacturer/merchant/extended" (only if mentioned, otherwise null),
+        "return_policy_days": number (return deadline in days, if mentioned),
+        "return_deadline": "YYYY-MM-DD format" (specific return deadline date, if mentioned),
+      }
+
+      IMPORTANT: Extract the actual product name from the receipt (e.g., "SMLSS HIPSTER", "iPhone 15 Pro", etc.), not generic terms like "Order" or "Receipt".
+      Default to 12 months warranty if not specified. Extract the purchase date from the receipt.
+    PROMPT
+
+    response_text = call_gemini_api_with_image(prompt, image_base64)
+    Rails.logger.debug "🤖 AI Response: #{response_text}"
+
+    response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
+
+    result = JSON.parse(response_text)
+    Rails.logger.info "🤖 AI Analysis Result: #{result.inspect}"
+
+    if result["is_receipt"] == true
+      Rails.logger.info "✅ AI confirmed this is a receipt"
+      result
+    else
+      Rails.logger.info "❌ AI determined this is not a receipt"
+      nil
+    end
+  rescue => e
+    Rails.logger.error "💥 AI image extraction failed: #{e.message}"
+    Rails.logger.error "💥 Backtrace: #{e.backtrace.first(5).join('\n')}"
+    nil
+  end
+
   def answer_warranty_question(question, search_results = nil)
     return nil unless @client
 
@@ -214,6 +270,65 @@ class AiService
         Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
         sleep(retry_delay)
         return call_gemini_api(prompt, retry_count + 1)
+      end
+      
+      raise GeminiRateLimitError.new(error_message, retry_delay)
+    else
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "API error"
+      Rails.logger.error "Gemini API error: #{response.code} - #{error_message}"
+      raise "Gemini API error: #{response.code} - #{error_message}"
+    end
+  rescue JSON::ParserError => e
+    Rails.logger.error "Gemini API response parse error: #{e.message}"
+    raise "Gemini API error: Invalid response format"
+  rescue GeminiRateLimitError
+    raise
+  rescue => e
+    Rails.logger.error "Gemini API call failed: #{e.message}"
+    raise e
+  end
+
+  def call_gemini_api_with_image(prompt, image_base64, retry_count = 0)
+    api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
+    return nil unless api_key.present?
+
+    uri = URI("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=#{CGI.escape(api_key)}")
+    
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    
+    request = Net::HTTP::Post.new(uri.request_uri)
+    request["Content-Type"] = "application/json"
+    request.body = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: "image/png",
+              data: image_base64
+            }
+          }
+        ]
+      }]
+    }.to_json
+
+    response = http.request(request)
+    
+    if response.code == "200"
+      result = JSON.parse(response.body)
+      result.dig("candidates", 0, "content", "parts", 0, "text") || ""
+    elsif response.code == "429"
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "Rate limit exceeded"
+      retry_delay = extract_retry_delay(error_data)
+      
+      max_retry_delay = 10
+      if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
+        Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
+        sleep(retry_delay)
+        return call_gemini_api_with_image(prompt, image_base64, retry_count + 1)
       end
       
       raise GeminiRateLimitError.new(error_message, retry_delay)

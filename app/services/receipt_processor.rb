@@ -26,9 +26,35 @@ class ReceiptProcessor
 
     begin
       text = @vision_service.extract_text_from_image(image_data)
+      
       if text.blank?
-        Rails.logger.warn "No text extracted from image. Vision API may not be configured or image may not contain readable text."
+        Rails.logger.warn "No text extracted from Vision API, trying AI fallback..."
+        
+        begin
+          image_base64 = Base64.strict_encode64(image_data)
+          ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
+          
+          if ai_result && ai_result["is_receipt"] == true
+            Rails.logger.info "✅ AI extracted receipt from image: #{ai_result['product_name']} from #{ai_result['merchant']}"
+            return {
+              product_name: ai_result["product_name"],
+              merchant: ai_result["merchant"],
+              purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+              line_items: [{ name: ai_result["product_name"], quantity: 1, price: nil }],
+              total_amount: nil,
+              order_number: nil,
+              warranty_length_months: ai_result["warranty_length_months"],
+              warranty_type: ai_result["warranty_type"],
+              return_policy_days: ai_result["return_policy_days"],
+              return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+            }
+          end
+        rescue => ai_error
+          Rails.logger.warn "AI fallback also failed: #{ai_error.message}"
+        end
+        
         Rails.logger.warn "Vision API key configured: #{@vision_service.instance_variable_get(:@api_key).present?}"
+        Rails.logger.warn "OAuth configured: #{@vision_service.instance_variable_get(:@user).present?}"
         return nil
       end
 
@@ -47,6 +73,34 @@ class ReceiptProcessor
       result
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
+      
+      if e.message.include?("PERMISSION_DENIED") || e.message.include?("insufficient authentication scopes")
+        Rails.logger.warn "⚠️ Vision API permission denied - user needs to sign out and sign back in to grant Vision API scope"
+        
+        begin
+          image_base64 = Base64.strict_encode64(image_data)
+          ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
+          
+          if ai_result && ai_result["is_receipt"] == true
+            Rails.logger.info "✅ AI fallback succeeded: #{ai_result['product_name']} from #{ai_result['merchant']}"
+            return {
+              product_name: ai_result["product_name"],
+              merchant: ai_result["merchant"],
+              purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+              line_items: [{ name: ai_result["product_name"], quantity: 1, price: nil }],
+              total_amount: nil,
+              order_number: nil,
+              warranty_length_months: ai_result["warranty_length_months"],
+              warranty_type: ai_result["warranty_type"],
+              return_policy_days: ai_result["return_policy_days"],
+              return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+            }
+          end
+        rescue => ai_error
+          Rails.logger.warn "AI fallback also failed: #{ai_error.message}"
+        end
+      end
+      
       Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
