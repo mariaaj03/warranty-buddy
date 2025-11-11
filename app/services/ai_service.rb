@@ -186,9 +186,10 @@ class AiService
     })
 
     response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-    response_text.strip
+    response_text&.strip || "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
   rescue => e
     Rails.logger.error "AI warranty question answering failed: #{e.message}"
-    "I'm sorry, I encountered an error while processing your question. Please try again."
+    Rails.logger.error e.backtrace.first(5).join("\n")
+    raise e
   end
 end

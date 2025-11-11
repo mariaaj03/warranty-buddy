@@ -1059,12 +1059,14 @@
               sourcesHtml += '</ul></div>';
             }
             addMessage(data.answer + sourcesHtml, 'assistant');
+          } else if (data.error) {
+            addMessage('Error: ' + data.error, 'assistant');
           } else {
             addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
           }
         } catch (error) {
           removeMessage(loadingId);
-          addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+          addMessage('Sorry, I encountered an error: ' + error.message + '. Please check your API configuration.', 'assistant');
         }
       });
 
