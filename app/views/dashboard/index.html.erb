@@ -398,7 +398,14 @@
       font-size: 1rem;
       font-weight: 600;
       color: #374151;
+      margin-bottom: 0.5rem;
+    }
+
+    .export-subtitle {
+      font-size: 0.875rem;
+      color: #6b7280;
       margin-bottom: 1rem;
+      margin-top: 0;
     }
 
     .export-buttons {
@@ -410,6 +417,12 @@
 
     .export-form-inline {
       display: inline;
+      margin: 0;
+      padding: 0;
+    }
+
+    .export-form-inline button {
+      margin: 0;
     }
 
     .export-btn {
@@ -427,6 +440,9 @@
       background: #ffffff;
       color: #374151;
       cursor: pointer;
+      box-sizing: border-box;
+      height: auto;
+      line-height: 1.5;
     }
 
     .export-btn:hover {
@@ -665,19 +681,20 @@
     <!-- Export Section -->
     <div class="export-section">
       <h3>Export Warranties</h3>
+      <p class="export-subtitle">You'll receive notifications when your warranties are about to expire</p>
       <div class="export-buttons">
         <%= link_to export_products_path(format: :csv), class: "export-btn export-btn--csv" do %>
-          Export CSV
+          ⬇️ Export CSV
         <% end %>
 
         <%= link_to calendar_products_path(format: :ics), class: "export-btn export-btn--ical" do %>
-          Export iCal
+          📅 Export iCal
         <% end %>
 
         <% if current_user.gmail_connected? %>
           <%= form_with url: export_to_google_calendar_products_path, method: :post, local: true, data: { turbo: false }, class: "export-form-inline" do |f| %>
             <button type="submit" class="export-btn export-btn--google-cal">
-              Export to Google Calendar
+              📆 Export to Google Calendar
             </button>
           <% end %>
         <% end %>
