@@ -203,21 +203,22 @@ body {
 }
 
 .card-1 {
-  top: 0;
-  left: 0;
+  top: 20px;
+  left: 20px;
   animation-delay: 0s;
 }
 
 .card-2 {
-  top: 120px;
-  right: 0;
+  top: 140px;
+  right: 20px;
   animation-delay: 2s;
 }
 
 .card-3 {
-  bottom: 0;
+  bottom: 40px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(0);
+  animation: float-card-3 6s ease-in-out infinite;
   animation-delay: 4s;
 }
 
@@ -227,6 +228,15 @@ body {
   }
   50% {
     transform: translateY(-20px);
+  }
+}
+
+@keyframes float-card-3 {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-20px);
   }
 }
 
