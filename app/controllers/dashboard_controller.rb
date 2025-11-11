@@ -68,7 +68,12 @@ class DashboardController < ApplicationController
       end
 
       if receipt_data.nil? && extraction_error.nil?
-        extraction_error = "Could not extract information from receipt. Please enter details manually."
+        vision_api_key = Rails.application.credentials.dig(:google, :vision_api_key) || ENV["GOOGLE_VISION_API_KEY"]
+        if vision_api_key.blank?
+          extraction_error = "Could not extract information from receipt. Vision API is not configured. Please enter details manually or configure Google Vision API key."
+        else
+          extraction_error = "Could not extract information from receipt. The image may be unclear or the format is not recognized. Please enter details manually."
+        end
       end
     end
 

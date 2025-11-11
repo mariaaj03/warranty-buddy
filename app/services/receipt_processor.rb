@@ -28,12 +28,22 @@ class ReceiptProcessor
       text = @vision_service.extract_text_from_image(image_data)
       if text.blank?
         Rails.logger.warn "No text extracted from image. Vision API may not be configured or image may not contain readable text."
+        Rails.logger.warn "Vision API key configured: #{@vision_service.instance_variable_get(:@api_key).present?}"
         return nil
       end
 
       Rails.logger.info "Extracted #{text.length} characters from image"
+      Rails.logger.debug "First 500 chars of extracted text: #{text[0..500]}"
+      
       result = parse_receipt_text_first(text)
-      Rails.logger.info "Parsed receipt data: #{result.inspect}" if result
+      
+      if result
+        Rails.logger.info "✅ Parsed receipt data: merchant=#{result[:merchant]}, product=#{result[:product_name]}, items=#{result[:line_items]&.length || 0}"
+      else
+        Rails.logger.warn "⚠️ Receipt parsing returned nil - text was extracted but couldn't parse structure"
+        Rails.logger.debug "Full extracted text: #{text[0..1000]}"
+      end
+      
       result
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
@@ -80,31 +90,36 @@ class ReceiptProcessor
     
     if result && result[:line_items]&.any?
       result[:product_name] = result[:line_items].first[:name]
+      Rails.logger.info "✅ Regex parsing succeeded: #{result[:product_name]} from #{result[:merchant]}"
       return result
     end
 
+    Rails.logger.info "🤖 Regex parsing found no line items, trying AI extraction..."
     begin
       ai_result = @ai_service.extract_receipt_info(text)
       
       if ai_result && ai_result["is_receipt"] == true
         product_name = ai_result["product_name"]
+        Rails.logger.info "✅ AI extraction succeeded: #{product_name} from #{ai_result['merchant']}"
         {
           product_name: product_name,
-          merchant: ai_result["merchant"],
-          purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+          merchant: ai_result["merchant"] || result&.dig(:merchant),
+          purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : result&.dig(:purchase_date),
           line_items: [{ name: product_name, quantity: 1, price: nil }],
-          total_amount: nil,
-          order_number: nil,
+          total_amount: result&.dig(:total_amount),
+          order_number: result&.dig(:order_number),
           warranty_length_months: ai_result["warranty_length_months"],
           warranty_type: ai_result["warranty_type"],
           return_policy_days: ai_result["return_policy_days"],
           return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
         }
       else
+        Rails.logger.warn "⚠️ AI did not recognize this as a receipt"
         result
       end
     rescue => e
-      Rails.logger.warn "AI parsing failed (rate limit?): #{e.message}"
+      Rails.logger.warn "⚠️ AI parsing failed: #{e.message}"
+      Rails.logger.warn e.backtrace.first(3).join("\n")
       result
     end
   end
@@ -134,19 +149,28 @@ class ReceiptProcessor
       "Apple",
       "Microsoft",
       "Home\\s+Depot",
-      "Lowes"
+      "Lowes",
+      "Victoria'?s\\s+Secret",
+      "Sephora",
+      "Nordstrom",
+      "Macy'?s",
+      "Ulta",
+      "Zappos"
     ]
 
     common_merchants.each do |merchant_pattern|
       if text.match?(/#{merchant_pattern}/i)
         # Return the cleaned up name without regex escapes
-        return merchant_pattern.gsub(/\\s\+/, " ")
+        cleaned = merchant_pattern.gsub(/\\s\+/, " ").gsub(/'\\?s/, "'s")
+        return cleaned
       end
     end
 
     # Look for patterns like "Thank you for shopping at [Store]"
     if match = text.match(/thank you for shopping at\s+([^\n\r]{2,50})/i)
-      return match[1].strip
+      merchant = match[1].strip
+      merchant = merchant.split(',').first.strip if merchant.include?(',')
+      return merchant
     end
 
     # Look for patterns like "Store: [Name]"
