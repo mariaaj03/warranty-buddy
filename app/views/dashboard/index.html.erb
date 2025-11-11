@@ -3,6 +3,43 @@
 <head>
   <meta charset="utf-8">
   <title><%= @title %></title>
+  <style>
+    .dashboard-header {
+      background: #ffffff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    .dashboard-header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .user-name {
+      color: #4b5563;
+      font-weight: 500;
+    }
+    .btn-logout {
+      padding: 0.5rem 1rem;
+      background: #f3f4f6;
+      color: #1a1a1a;
+      text-decoration: none;
+      border-radius: 0.5rem;
+      border: 1px solid #e5e7eb;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .btn-logout:hover {
+      background: #e5e7eb;
+    }
+  </style>
   
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
@@ -153,8 +190,24 @@
   </style>
 </head>
 <body>
-  <h1><%= @title %></h1>
-  <div class="muted"><%= @subtitle %></div>
+  <div class="dashboard-header">
+    <div>
+      <h1><%= @title %></h1>
+      <div class="muted"><%= @subtitle %></div>
+    </div>
+    <div class="user-info">
+      <% if user_signed_in? %>
+        <span class="user-name">
+          <% if current_user.name.present? %>
+            <%= current_user.name %>
+          <% else %>
+            <%= current_user.email %>
+          <% end %>
+        </span>
+        <%= button_to "Sign Out", destroy_user_session_path, method: :delete, class: "btn-logout", form: { style: "display: inline;" } %>
+      <% end %>
+    </div>
+  </div>
 
 <div class="row">
   <% if @gmail_connected %>
@@ -162,14 +215,14 @@
     <%= button_to "Parse Gmail Receipts", "/parse_gmail_receipts", method: :post, class: "btn btn-primary" %>
     <%= button_to "Disconnect Gmail", "/disconnect_gmail", method: :post, class: "btn btn-danger" %>
   <% else %>
-    <%= button_to "Connect Gmail", "/auth/google_oauth2", method: :post, class: "btn btn-primary", data: { turbo: false } %>
+    <%= button_to "Connect Gmail", user_google_oauth2_omniauth_authorize_path, method: :post, class: "btn btn-primary", data: { turbo: false } %>
     <span class="badge not">Not Connected</span>
   <% end %>
 </div>
 
 
   <div class="filters">
-    <form action="/" method="get" class="filters-form">
+    <form action="<%= dashboard_path %>" method="get" class="filters-form">
       <div class="control">
         <label class="visually-hidden" for="filter-search">Search</label>
         <input id="filter-search" type="text" name="search" value="<%= h(@search_term) %>" placeholder="Search product or merchant" />

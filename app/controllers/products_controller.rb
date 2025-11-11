@@ -1,15 +1,11 @@
 class ProductsController < ApplicationController
-    require "csv"
+  before_action :authenticate_user!
+  require "csv"
 
-    # Export all warranties for the connected Gmail user as CSV
-    def export
-      unless session[:gmail_uid]
-        redirect_to root_path, alert: "Please connect Gmail first."
-        return
-      end
-
-      # Fetch warranties for the current Gmail user
-      products = Product.for_user(session[:gmail_uid]).to_a.sort_by do |p|
+  # Export all warranties for the current user as CSV
+  def export
+    # Fetch warranties for the current user
+    products = current_user.products.to_a.sort_by do |p|
         # Sort by computed expiry_date, put nils at the end
         p.expiry_date || Date.new(3000, 1, 1)
       end
@@ -46,15 +42,10 @@ class ProductsController < ApplicationController
       end
     end
 
-    def calendar
-        unless session[:gmail_uid]
-          redirect_to root_path, alert: "Please connect Gmail first."
-          return
-        end
+  def calendar
+    require "icalendar"
 
-        require "icalendar"
-
-        products = Product.for_user(session[:gmail_uid]).to_a
+    products = current_user.products.to_a
 
         # Keep 0 (same-day) AND positive offsets; dedupe & sort
         offsets = Array(params[:reminders])

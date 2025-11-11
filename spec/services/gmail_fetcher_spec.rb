@@ -1,3 +1,4 @@
+git checkout -b maria-new-branch
 require 'rails_helper'
 
 RSpec.describe GmailFetcher do

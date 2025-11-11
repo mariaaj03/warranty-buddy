@@ -1,9 +1,13 @@
 Rails.application.routes.draw do
-  root "dashboard#index"
-
-  # OAuth callback & failure
-  get "/auth/:provider/callback", to: "dashboard#google_auth"
-  get "/auth/failure", to: "dashboard#oauth_failure"
+  root "home#index"
+  
+  # Devise routes
+  devise_for :users, controllers: {
+    omniauth_callbacks: "users/omniauth_callbacks"
+  }
+  
+  # Dashboard routes (require authentication)
+  get "dashboard", to: "dashboard#index", as: :dashboard
 
   # csv/ical routes
   resources :products, only: [] do
@@ -19,8 +23,7 @@ Rails.application.routes.draw do
 
 
 
-  # Dashboard routes
-  get "dashboard/index"
+  # Dashboard routes (require authentication)
   get "dashboard/connect_gmail"
   get "dashboard/upload"
   post "/upload", to: "dashboard#upload"
