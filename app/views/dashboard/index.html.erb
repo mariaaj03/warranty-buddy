@@ -936,5 +936,156 @@
     });
   })();
   </script>
+
+  <div id="chatbot-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+    <div id="chatbot-window" style="display: none; width: 380px; height: 600px; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); flex-direction: column; overflow: hidden;">
+      <div style="background: #1a73e8; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Warranty Assistant</h3>
+        <button id="chatbot-close" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+      </div>
+      <div id="chatbot-messages" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+        <div style="background: #f3f4f6; padding: 0.75rem 1rem; border-radius: 8px; max-width: 85%;">
+          <p style="margin: 0; color: #374151; font-size: 0.9rem;">Hi! I'm your warranty assistant. Ask me anything about warranty coverage, like "Is water damage covered?" or "What's covered under my iPhone warranty?"</p>
+        </div>
+      </div>
+      <div style="border-top: 1px solid #e5e7eb; padding: 1rem; background: #f9fafb;">
+        <form id="chatbot-form" style="display: flex; gap: 0.5rem;">
+          <input type="text" id="chatbot-input" placeholder="Ask a question..." style="flex: 1; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; outline: none;" />
+          <button type="submit" style="background: #1a73e8; color: white; border: none; padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem;">Send</button>
+        </form>
+      </div>
+    </div>
+    <button id="chatbot-toggle" style="width: 60px; height: 60px; border-radius: 50%; background: #1a73e8; color: white; border: none; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4); display: flex; align-items: center; justify-content: center;">💬</button>
+  </div>
+
+  <style>
+    #chatbot-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    #chatbot-messages::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    #chatbot-messages::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+    .chatbot-message {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      max-width: 85%;
+      word-wrap: break-word;
+    }
+    .chatbot-message.user {
+      background: #1a73e8;
+      color: white;
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    .chatbot-message.assistant {
+      background: #f3f4f6;
+      color: #374151;
+      align-self: flex-start;
+    }
+    .chatbot-message.loading {
+      background: #f3f4f6;
+      color: #6b7280;
+      font-style: italic;
+    }
+    .chatbot-sources {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid #e5e7eb;
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+    .chatbot-sources a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    .chatbot-sources a:hover {
+      text-decoration: underline;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const chatbotToggle = document.getElementById('chatbot-toggle');
+      const chatbotWindow = document.getElementById('chatbot-window');
+      const chatbotClose = document.getElementById('chatbot-close');
+      const chatbotForm = document.getElementById('chatbot-form');
+      const chatbotInput = document.getElementById('chatbot-input');
+      const chatbotMessages = document.getElementById('chatbot-messages');
+
+      chatbotToggle.addEventListener('click', function() {
+        chatbotWindow.style.display = chatbotWindow.style.display === 'none' ? 'flex' : 'none';
+        if (chatbotWindow.style.display === 'flex') {
+          chatbotInput.focus();
+        }
+      });
+
+      chatbotClose.addEventListener('click', function() {
+        chatbotWindow.style.display = 'none';
+      });
+
+      chatbotForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const question = chatbotInput.value.trim();
+        if (!question) return;
+
+        addMessage(question, 'user');
+        chatbotInput.value = '';
+        const loadingId = addMessage('Thinking...', 'assistant', true);
+
+        try {
+          const response = await fetch('/chatbot/ask', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ question: question })
+          });
+
+          const data = await response.json();
+          removeMessage(loadingId);
+
+          if (data.answer) {
+            let sourcesHtml = '';
+            if (data.sources && data.sources.length > 0) {
+              sourcesHtml = '<div class="chatbot-sources"><strong>Sources:</strong><ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem;">';
+              data.sources.forEach(source => {
+                sourcesHtml += `<li><a href="${source.url}" target="_blank">${source.title}</a></li>`;
+              });
+              sourcesHtml += '</ul></div>';
+            }
+            addMessage(data.answer + sourcesHtml, 'assistant');
+          } else {
+            addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+          }
+        } catch (error) {
+          removeMessage(loadingId);
+          addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+        }
+      });
+
+      function addMessage(text, type, isLoading = false) {
+        const messageDiv = document.createElement('div');
+        const messageId = 'msg-' + Date.now() + '-' + Math.random();
+        messageDiv.id = messageId;
+        messageDiv.className = `chatbot-message ${type}${isLoading ? ' loading' : ''}`;
+        messageDiv.innerHTML = `<p style="margin: 0; font-size: 0.9rem; white-space: pre-wrap;">${text}</p>`;
+        chatbotMessages.appendChild(messageDiv);
+        chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        return isLoading ? messageId : null;
+      }
+
+      function removeMessage(messageId) {
+        const message = document.getElementById(messageId);
+        if (message) {
+          message.remove();
+        }
+      }
+    });
+  </script>
 </body>
 </html>
