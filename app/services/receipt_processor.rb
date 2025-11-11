@@ -158,11 +158,13 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    lines = text.split(/\n|\r\n/).map(&:strip).first(20)
+    lines = text.split(/\n|\r\n/).map(&:strip).first(30)
     
     date_patterns = [
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
+      /(?:purchased|date|order\s+date)[:\s]*(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/i,
+      /(?:purchased|date|order\s+date)[:\s]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}/i,
       /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
       /(?:date|purchased?|order\s+date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
       /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
@@ -170,9 +172,11 @@ class ReceiptProcessor
     ]
 
     lines.each do |line|
+      next if line.match?(/return date|serial number|part number|imei/i)
+      
       date_patterns.each do |pattern|
         if match = line.match(pattern)
-          date_str = match[1]
+          date_str = match[1] || match[0]
           begin
             parsed_date = Date.parse(date_str)
             if parsed_date <= Date.today && parsed_date >= Date.today - 3650
@@ -186,8 +190,9 @@ class ReceiptProcessor
 
     date_patterns.each do |pattern|
       if match = text.match(pattern)
+        date_str = match[1] || match[0]
         begin
-          parsed_date = Date.parse(match[1])
+          parsed_date = Date.parse(date_str)
           if parsed_date <= Date.today && parsed_date >= Date.today - 3650
             return parsed_date
           end
@@ -209,53 +214,73 @@ class ReceiptProcessor
       email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
       next if line.match?(email_pattern)
       
-      next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you)/i)
+      next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial number|imei|return date|for support)/i)
       
-      price_match = line.match(/\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
-      next unless price_match
-      
-      price = parse_price(price_match[1])
-      next unless price && price > 0
-      
-      product_name = line.gsub(/\$?\s*[0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?/, "").strip
-      product_name = product_name.gsub(/\d+\s*x?\s*/i, "").strip
-      
-      next if product_name.length < 3
-      next if product_name.match?(/^[0-9\s\-]+$/)
-      
-      items << {
-        name: product_name,
-        quantity: 1,
-        price: price
-      }
+      price_match = line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+      if price_match
+        price = parse_price(price_match[1])
+        next unless price && price > 0
+        
+        product_name = nil
+        
+        (0..5).each do |offset|
+          prev_index = index - offset - 1
+          next if prev_index < 0
+          
+          prev_line = lines[prev_index]
+          next if prev_line.blank?
+          
+          next if prev_line.match?(/^(part number|serial number|imei|return date|for support|www\.|http)/i)
+          next if prev_line.match?(email_pattern)
+          next if prev_line.match?(/\d{2}:\d{2}/)
+          next if prev_line.match?(/^\d{4}-\d{2}-\d{2}/)
+          next if prev_line.match?(/^\$/)
+          
+          if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{5,80}$/) && !prev_line.match?(/^\d+$/)
+            product_name = prev_line
+            break
+          end
+        end
+        
+        if product_name && product_name.length >= 5
+          items << {
+            name: product_name,
+            quantity: 1,
+            price: price
+          }
+        end
+      end
     end
 
     if items.empty?
-      line_patterns = [
-        /([A-Z][a-zA-Z\s]{2,50}?)\s+\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/,
-        /(\d+)\s+x\s+([A-Z][a-zA-Z\s]{2,50}?)\s+\$?\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/
-      ]
-
-      line_patterns.each do |pattern|
-        text.scan(pattern).each do |match|
-          if match.length == 3
-            qty = match[0].to_i
-            name = match[1].strip
-            price = parse_price(match[2])
-          else
-            qty = 1
-            name = match[0].strip
-            price = parse_price(match[1])
+      lines.each_with_index do |line, index|
+        next if line.length < 5
+        
+        email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+        next if line.match?(email_pattern)
+        next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial|imei|return|for support|www\.|http)/i)
+        next if line.match?(/\d{2}:\d{2}/)
+        next if line.match?(/^\d{4}-\d{2}-\d{2}/)
+        next if line.match?(/^\$/)
+        
+        if line.match?(/^[A-Z][a-zA-Z0-9\s\-]{5,80}$/) && !line.match?(/^\d+$/)
+          next_line = lines[index + 1] if index + 1 < lines.length
+          if next_line && next_line.match?(/part number|serial number/i)
+            price_line = lines[index + 3] || lines[index + 4]
+            if price_line
+              price_match = price_line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+              if price_match
+                price = parse_price(price_match[1])
+                if price && price > 0
+                  items << {
+                    name: line,
+                    quantity: 1,
+                    price: price
+                  }
+                end
+              end
+            end
           end
-
-          next if name.length < 3 || price.nil? || name.match?(/@/)
-          next if name.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store)/i)
-
-          items << {
-            name: name,
-            quantity: qty,
-            price: price
-          }
         end
       end
     end
