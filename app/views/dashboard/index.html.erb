@@ -2,30 +2,68 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title><%= @title %></title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard - Warranty Buddy</title>
+  <%= csrf_meta_tags %>
+  <%= csp_meta_tag %>
+  <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f9fafb;
+      color: #1a1a1a;
+      line-height: 1.6;
+    }
+
+    .dashboard-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* Header */
     .dashboard-header {
       background: #ffffff;
       border-bottom: 1px solid #e5e7eb;
-      padding: 1rem 2rem;
+      padding: 1.5rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
-    .dashboard-header h1 {
-      margin: 0;
+
+    .dashboard-header .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f172a;
     }
+
+    .logo-icon {
+      font-size: 2rem;
+    }
+
     .user-info {
       display: flex;
       align-items: center;
       gap: 1rem;
     }
+
     .user-name {
       color: #4b5563;
       font-weight: 500;
     }
+
     .btn-logout {
       padding: 0.5rem 1rem;
       background: #f3f4f6;
@@ -35,485 +73,764 @@
       border: 1px solid #e5e7eb;
       font-weight: 500;
       transition: all 0.2s ease;
+      cursor: pointer;
+      font-size: 0.875rem;
     }
+
     .btn-logout:hover {
       background: #e5e7eb;
     }
-  </style>
-  
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
-    h1 { margin: 0 0 .25rem 0; }
-    .muted { color: #666; margin-bottom: 1rem; }
-    .row { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { border: 1px solid #ddd; padding: .5rem .75rem; text-align: left; }
-    .flash { background: #eefbea; border: 1px solid #bde5a6; padding: .5rem .75rem; margin: .75rem 0; }
-    .btn { padding: .5rem .75rem; border: 1px solid #333; background: #fff; cursor: pointer; border-radius: .375rem; }
-    .btn-primary { background: #0b57d0; color: #fff; border-color: #0b57d0; }
-    .btn-secondary { background: #f6f6f6; color: #111; }
-    .btn-danger { background: #a11; color: #fff; border-color: #a11; }
-    .btn-sm { padding: .35rem .6rem; font-size: .9rem; }
-    .btn-outline { background:#fff; color:#111; border-color:#bbb; }
-    .badge { padding: .1rem .5rem; border-radius: .5rem; border: 1px solid #ccc; }
-    .ok { color: #0a7a2f; border-color: #0a7a2f; }
-    .not { color: #a11; border-color: #a11; }
-    form { display: inline-block; }
-    label { display: block; margin-top: .5rem; }
-    input[type="text"], input[type="number"], input[type="date"] { padding: .4rem .5rem; width: 16rem; }
-    .section { margin-top: 2rem; }
-    details { border: 1px solid #ddd; border-radius: .5rem; padding: .75rem 1rem; background: #fafafa; }
-    details > summary { cursor: pointer; font-weight: 600; }
-    .status-badge { padding: .15rem .5rem; border-radius: .5rem; font-size: .85rem; }
-    .status-active { background: #e6f4ea; color: #1e8e3e; }
-    .status-expired { background: #fce8e6; color: #c5221f; }
-    .export-actions {
+
+    /* Flash messages */
+    .flash {
+      padding: 1rem 1.5rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+      font-weight: 500;
+    }
+
+    .flash.notice {
+      background: #e6f4ea;
+      color: #1e8e3e;
+      border: 1px solid #bde5a6;
+    }
+
+    .flash.alert {
+      background: #fce8e6;
+      color: #c5221f;
+      border: 1px solid #f9ab9f;
+    }
+
+    /* Filters Section */
+    .filters-section {
+      background: #ffffff;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      margin-bottom: 2rem;
+    }
+
+    .filters-form {
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
-      align-items: center;          /* center vertically with CSV */
       gap: 1rem;
-      margin: 1.5rem 0 2rem;
+      align-items: flex-end;
     }
-    
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .filter-group label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      padding: 0.625rem 0.875rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+
+    .filter-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .btn-filter {
+      padding: 0.625rem 1.25rem;
+      border-radius: 0.5rem;
+      font-weight: 500;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .btn-apply {
+      background: #1a73e8;
+      color: #ffffff;
+      border-color: #1a73e8;
+    }
+
+    .btn-apply:hover {
+      background: #1557b0;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+    }
+
+    .btn-reset {
+      background: #ffffff;
+      color: #4b5563;
+      border-color: #d1d5db;
+    }
+
+    .btn-reset:hover {
+      background: #f9fafb;
+      border-color: #9ca3af;
+    }
+
+    /* Add Product Section */
+    .add-product-section {
+      background: #ffffff;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      margin-bottom: 2rem;
+    }
+
+    .add-product-section details {
+      border: none;
+    }
+
+    .add-product-section summary {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #0f172a;
+      cursor: pointer;
+      padding: 0.5rem 0;
+    }
+
+    .add-product-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .add-product-form .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .add-product-form label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .add-product-form input {
+      padding: 0.625rem 0.875rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .add-product-form input:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+
+    .btn-add {
+      grid-column: 1 / -1;
+      padding: 0.75rem 1.5rem;
+      background: #1a73e8;
+      color: #ffffff;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      justify-self: start;
+    }
+
+    .btn-add:hover {
+      background: #1557b0;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+    }
+
+    /* Table Section */
+    .warranties-section {
+      background: #ffffff;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      margin-bottom: 2rem;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .warranties-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+    }
+
+    .warranties-table thead {
+      background: #f9fafb;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .warranties-table th {
+      padding: 0.875rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .warranties-table td {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.875rem;
+    }
+
+    .warranties-table tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .warranties-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .product-name {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .status-active {
+      background: #e6f4ea;
+      color: #1e8e3e;
+    }
+
+    .status-expired {
+      background: #fce8e6;
+      color: #c5221f;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .action-btn {
+      border: none;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      background: transparent;
+    }
+
+    .edit-btn {
+      color: #6b7280;
+    }
+
+    .edit-btn:hover {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .delete-btn {
+      color: #ef4444;
+    }
+
+    .delete-btn:hover {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Export Section */
+    .export-section {
+      background: #ffffff;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      text-align: center;
+    }
+
+    .export-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
     .export-btn {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      font: 600 16px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      padding: 0.85rem 1.2rem;
-      border-radius: 999px;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
       text-decoration: none;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: transform .02s ease, filter .15s ease, box-shadow .15s ease;
-      box-shadow: 0 1px 2px rgba(0,0,0,.06);
-    }
-    .export-btn:hover { filter: brightness(0.95); }
-    .export-btn:active { transform: translateY(1px); }
-    
-    .export-btn--csv  { background: #1a73e8; color: #fff; }
-    .export-btn--ical { background: #1e8e3e; color: #fff; }
-    
-    /* --- New: iCal "combo pill" --- */
-    .ical-combo {
-      display: inline-flex;
-      align-items: center;
-      gap: .75rem;                     /* space between button and options */
-      padding: .35rem .5rem .35rem .35rem;
-      border: 1px solid #cce7d4;       /* light green border */
-      background: #eef7f0;             /* pale green bg */
-      border-radius: 999px;            /* capsule */
-      box-shadow: 0 1px 2px rgba(0,0,0,.06);
-    }
-    
-    /* keep the iCal button flush inside the capsule */
-    .ical-combo .export-btn--ical {
-      margin: 0;
-    }
-    
-    /* thin divider between button and checkboxes */
-    .ical-divider {
-      width: 1px;
-      height: 1.6rem;
-      background: #cce7d4;
-    }
-    
-    /* Reminders inline inside the capsule */
-    .ical-reminders-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: .75rem 1rem;
-      padding-right: .25rem;
-    }
-    
-    .ical-label {
       font-weight: 600;
-      color: #1f3b2b;
-      margin-right: .25rem;
-      font-size: .95rem;
-    }
-    
-    .ical-reminders-row label {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      font-size: .95rem;
-      color: #111827;
-    }
-    
-    /* small visual polish for native checkbox */
-    .ical-reminders-row input[type="checkbox"] {
-      transform: translateY(1px) scale(0.95);
-    }
-    
-    /* Filter bar */
-    .filters { margin: 1rem 0 0.5rem; }
-    .filters-form { display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:flex-end; }
-    .filters-form .control { display:flex; flex-direction:column; gap:.25rem; }
-    .filters-form .control label { margin-top: 0; font-size: .9rem; color:#444; }
-    .filters-form select,
-    .filters-form input[type="text"] { height: 34px; padding: .25rem .5rem; min-width: 12rem; border:1px solid #bbb; border-radius: .35rem; }
-    .filters-actions { display:flex; align-items:center; gap:.5rem; }
-    .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
-    
-    /* Action button styles */
-    .action-btn {
-      border: none;
-      padding: 0.4rem 0.6rem;
-      border-radius: 0.25rem;
-      cursor: pointer;
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       transition: all 0.2s ease;
-      margin: 0 0.1rem;
+      border: 1px solid transparent;
     }
-    .edit-btn {
-      background: #6c757d;
-      color: white;
+
+    .export-btn--csv {
+      background: #1a73e8;
+      color: #ffffff;
     }
-    .edit-btn:hover {
-      background: #5a6268;
+
+    .export-btn--csv:hover {
+      background: #1557b0;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
     }
-    .delete-btn {
-      background: #e74c3c;
-      color: white;
+
+    .export-btn--ical {
+      background: #1e8e3e;
+      color: #ffffff;
     }
-    .delete-btn:hover {
-      background: #c0392b;
+
+    .export-btn--ical:hover {
+      background: #1a7a35;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(34, 142, 62, 0.3);
     }
-    .estimate-indicator {
-      color: #f39c12;
-      font-size: 0.8rem;
-      margin-left: 0.25rem;
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-container {
+        padding: 1rem;
+      }
+
+      .filters-form {
+        flex-direction: column;
+      }
+
+      .filter-group {
+        min-width: 100%;
+      }
+
+      .warranties-table {
+        font-size: 0.75rem;
+      }
+
+      .warranties-table th,
+      .warranties-table td {
+        padding: 0.75rem 0.5rem;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="dashboard-header">
-    <div>
-      <h1><%= @title %></h1>
-      <div class="muted"><%= @subtitle %></div>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <div class="dashboard-header">
+      <div class="logo">
+        <span class="logo-icon">📦</span>
+        <span>Warranty Buddy</span>
+      </div>
+      <div class="user-info">
+        <% if user_signed_in? %>
+          <span class="user-name">
+            <% if current_user.name.present? %>
+              <%= current_user.name %>
+            <% else %>
+              <%= current_user.email %>
+            <% end %>
+          </span>
+          <%= button_to "Sign Out", destroy_user_session_path, method: :delete, class: "btn-logout", form: { style: "display: inline;" } %>
+        <% end %>
+      </div>
     </div>
-    <div class="user-info">
-      <% if user_signed_in? %>
-        <span class="user-name">
-          <% if current_user.name.present? %>
-            <%= current_user.name %>
-          <% else %>
-            <%= current_user.email %>
-          <% end %>
-        </span>
-        <%= button_to "Sign Out", destroy_user_session_path, method: :delete, class: "btn-logout", form: { style: "display: inline;" } %>
-      <% end %>
-    </div>
-  </div>
 
-<div class="row">
-  <% if @gmail_connected %>
-    <span class="badge ok">Connected</span>
-    <%= button_to "Parse Gmail Receipts", "/parse_gmail_receipts", method: :post, class: "btn btn-primary" %>
-    <%= button_to "Disconnect Gmail", "/disconnect_gmail", method: :post, class: "btn btn-danger" %>
-  <% else %>
-    <%= button_to "Connect Gmail", user_google_oauth2_omniauth_authorize_path, method: :post, class: "btn btn-primary", data: { turbo: false } %>
-    <span class="badge not">Not Connected</span>
-  <% end %>
-</div>
+    <% if flash[:notice].present? %>
+      <div class="flash notice"><%= flash[:notice] %></div>
+    <% end %>
+    <% if flash[:alert].present? %>
+      <div class="flash alert"><%= flash[:alert] %></div>
+    <% end %>
 
-
-  <div class="filters">
-    <form action="<%= dashboard_path %>" method="get" class="filters-form">
-      <div class="control">
-        <label class="visually-hidden" for="filter-search">Search</label>
-        <input id="filter-search" type="text" name="search" value="<%= h(@search_term) %>" placeholder="Search product or merchant" />
-      </div>
-      <div class="control">
-        <label class="visually-hidden" for="filter-status">Status</label>
-        <select id="filter-status" name="status">
-          <option value="" <%= 'selected' if @status_filter.blank? %>>All</option>
-          <option value="active" <%= 'selected' if @status_filter == 'active' %>>Active</option>
-          <option value="expired" <%= 'selected' if @status_filter == 'expired' %>>Expired</option>
-          <option value="expiring_soon" <%= 'selected' if @status_filter == 'expiring_soon' %>>Expiring Soon</option>
-        </select>
-      </div>
-      <div class="control">
-        <label class="visually-hidden" for="filter-merchant">Merchant</label>
-        <select id="filter-merchant" name="merchant">
-          <option value="" <%= 'selected' if @merchant_filter.blank? %>>All</option>
-          <% @merchants.each do |m| %>
-            <option value="<%= h(m) %>" <%= 'selected' if @merchant_filter == m %>><%= m %></option>
-          <% end %>
-        </select>
-      </div>
-      <div class="control">
-        <label class="visually-hidden" for="filter-sort">Sort by</label>
-        <select id="filter-sort" name="sort">
-          <option value="expiry_date" <%= 'selected' if @sort_by == 'expiry_date' %>>Expiry Date</option>
-          <option value="product_name" <%= 'selected' if @sort_by == 'product_name' %>>Product Name</option>
-          <option value="purchase_date" <%= 'selected' if @sort_by == 'purchase_date' %>>Purchase Date</option>
-          <option value="merchant" <%= 'selected' if @sort_by == 'merchant' %>>Merchant</option>
-        </select>
-      </div>
-      <div class="filters-actions">
-        <button type="submit" class="btn btn-secondary btn-sm">Apply</button>
-        <a href="/" class="btn btn-outline btn-sm">Reset</a>
-      </div>
-    </form>
-  </div>
-
-  <details class="section">
-    <summary>Add a product warranty</summary>
-    <div style="margin-top:.75rem;">
-      <form action="/upload" method="post">
-        <%= csrf_meta_tags %>
-        <label>Product
-          <input type="text" name="product" required />
-        </label>
-        <label>Merchant (optional)
-          <input type="text" name="merchant" />
-        </label>
-        <label>Purchase Date
-          <input type="date" name="purchase_date" value="<%= Date.today.strftime('%Y-%m-%d') %>" />
-        </label>
-        <label>Warranty Length (months)
-          <input type="number" name="warranty_length" value="12" min="0" />
-        </label>
-        <button type="submit" class="btn btn-secondary">Add warranty</button>
+    <!-- Filters -->
+    <div class="filters-section">
+      <form action="<%= dashboard_path %>" method="get" class="filters-form">
+        <div class="filter-group">
+          <label for="filter-search">Search</label>
+          <input id="filter-search" type="text" name="search" value="<%= h(@search_term) %>" placeholder="Product or merchant..." />
+        </div>
+        <div class="filter-group">
+          <label for="filter-status">Status</label>
+          <select id="filter-status" name="status">
+            <option value="" <%= 'selected' if @status_filter.blank? %>>All Status</option>
+            <option value="active" <%= 'selected' if @status_filter == 'active' %>>Active</option>
+            <option value="expired" <%= 'selected' if @status_filter == 'expired' %>>Expired</option>
+            <option value="expiring_soon" <%= 'selected' if @status_filter == 'expiring_soon' %>>Expiring Soon</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-merchant">Merchant</label>
+          <select id="filter-merchant" name="merchant">
+            <option value="" <%= 'selected' if @merchant_filter.blank? %>>All Merchants</option>
+            <% @merchants.each do |m| %>
+              <option value="<%= h(m) %>" <%= 'selected' if @merchant_filter == m %>><%= m %></option>
+            <% end %>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-sort">Sort By</label>
+          <select id="filter-sort" name="sort">
+            <option value="expiry_date" <%= 'selected' if @sort_by == 'expiry_date' %>>Expiry Date</option>
+            <option value="product_name" <%= 'selected' if @sort_by == 'product_name' %>>Product Name</option>
+            <option value="purchase_date" <%= 'selected' if @sort_by == 'purchase_date' %>>Purchase Date</option>
+            <option value="merchant" <%= 'selected' if @sort_by == 'merchant' %>>Merchant</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button type="submit" class="btn-filter btn-apply">Apply</button>
+          <a href="<%= dashboard_path %>" class="btn-filter btn-reset">Reset</a>
+        </div>
       </form>
     </div>
-  </details>
 
-  
+    <!-- Add Product -->
+    <div class="add-product-section">
+      <details>
+        <summary>➕ Add a Product Warranty</summary>
+        <form action="/upload" method="post" class="add-product-form">
+          <%= csrf_meta_tags %>
+          <div class="form-field">
+            <label for="product">Product Name</label>
+            <input type="text" id="product" name="product" required placeholder="e.g., iPhone 15 Pro" />
+          </div>
+          <div class="form-field">
+            <label for="merchant">Merchant (optional)</label>
+            <input type="text" id="merchant" name="merchant" placeholder="e.g., Apple Store" />
+          </div>
+          <div class="form-field">
+            <label for="purchase_date">Purchase Date</label>
+            <input type="date" id="purchase_date" name="purchase_date" value="<%= Date.today.strftime('%Y-%m-%d') %>" />
+          </div>
+          <div class="form-field">
+            <label for="warranty_length">Warranty Length (months)</label>
+            <input type="number" id="warranty_length" name="warranty_length" value="12" min="0" />
+          </div>
+          <button type="submit" class="btn-add">Add Warranty</button>
+        </form>
+      </details>
+    </div>
 
-  <h3>Warranties</h3>
-  <table aria-label="warranties">
-    <thead>
-      <tr>
-        <th>Product</th><th>Merchant</th><th>Purchase Date</th><th>Warranty (months)</th><th>Expires</th><th>Status</th><th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% if @warranties.empty? %>
-        <tr><td colspan="7">No warranties yet.</td></tr>
-      <% else %>
-        <% @warranties.each do |w| %>
-          <tr data-warranty-id="<%= w.id %>">
-            <td><%= w.product_name %></td>
-            <td><%= w.merchant %></td>
-            <td><%= w.purchase_date.strftime("%Y-%m-%d") %></td>
-            <td>
-              <%= w.warranty_months %>
-              <% if w.warranty_months == 12 && w.source&.include?('parsed') %>
-                <span class="estimate-indicator" title="Estimated warranty length">~</span>
-              <% end %>
-            </td>
-            <td><%= w.expiry_date&.strftime("%Y-%m-%d") || '-' %></td>
-            <td>
-              <% if w.expiry_date && w.expiry_date >= Date.today %>
-                <span class="status-badge status-active">Active</span>
-              <% else %>
-                <span class="status-badge status-expired">Expired</span>
-              <% end %>
-            </td>
-            <td>
-              <button class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit warranty">
-                ✏️
-              </button>
-              <button class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete warranty">
-                🗑️
-              </button>
-            </td>
-          </tr>
+    <!-- Warranties Table -->
+    <div class="warranties-section">
+      <div class="section-header">
+        <h2 class="section-title">My Warranties</h2>
+        <% if @gmail_connected %>
+          <%= button_to "Parse Gmail Receipts", "/parse_gmail_receipts", method: :post, class: "btn-filter btn-apply", style: "margin: 0;" %>
         <% end %>
+      </div>
+
+      <% if @warranties.empty? %>
+        <div class="empty-state">
+          <div class="empty-state-icon">📦</div>
+          <p style="font-size: 1.125rem; margin-bottom: 0.5rem; color: #374151;">No warranties yet.</p>
+          <p style="color: #6b7280;">Add a warranty above or connect Gmail to automatically discover purchases.</p>
+        </div>
+      <% else %>
+        <table class="warranties-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Status</th>
+              <th>Expires</th>
+              <th>Merchant</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @warranties.each do |w| %>
+              <tr data-warranty-id="<%= w.id %>">
+                <td>
+                  <div class="product-name"><%= w.product_name %></div>
+                  <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                    Purchased <%= w.purchase_date.strftime("%b %d, %Y") %> • <%= w.warranty_months %> months
+                  </div>
+                </td>
+                <td>
+                  <% if w.expiry_date && w.expiry_date >= Date.today %>
+                    <span class="status-badge status-active">Active</span>
+                  <% else %>
+                    <span class="status-badge status-expired">Expired</span>
+                  <% end %>
+                </td>
+                <td>
+                  <% if w.expiry_date %>
+                    <strong><%= w.expiry_date.strftime("%b %d, %Y") %></strong>
+                    <% days_left = (w.expiry_date - Date.today).to_i %>
+                    <% if days_left >= 0 && days_left <= 30 %>
+                      <div style="font-size: 0.75rem; color: #f39c12; margin-top: 0.25rem;">
+                        <%= days_left %> days left
+                      </div>
+                    <% end %>
+                  <% else %>
+                    <span style="color: #9ca3af;">—</span>
+                  <% end %>
+                </td>
+                <td><%= w.merchant.present? ? w.merchant : "—" %></td>
+                <td>
+                  <div class="action-buttons">
+                    <button class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
+                      ✏️
+                    </button>
+                    <button class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete">
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
       <% end %>
-    </tbody>
-  </table>
-  <div class="export-actions" role="group" aria-label="Export actions">
-  <%= link_to "⬇️ Export CSV",
-              export_products_path(format: :csv),
-              class: "export-btn export-btn--csv",
-              title: "Download CSV" %>
-  
- <%= form_with url: calendar_products_path,
-              method: :get,
-              local: true,
-              data: { turbo: false },
-              html: { class: "ical-combo" } do %>
+    </div>
 
-  <button type="submit" class="export-btn export-btn--ical" title="Download iCal">
-    📅 Export iCal
-  </button>
-  <span class="ical-divider" aria-hidden="true"></span>
+    <!-- Export Section -->
+    <div class="export-section">
+      <h3 style="font-size: 1rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem;">Export Warranties</h3>
+      <div class="export-buttons">
+        <%= link_to export_products_path(format: :csv), class: "export-btn export-btn--csv" do %>
+          ⬇️ Export CSV
+        <% end %>
 
-
-  <span class="ical-divider" aria-hidden="true"></span>
-
-  <div class="ical-reminders-row" role="group" aria-label="iCal reminders">
-    <span class="ical-label">Reminders:</span>
-    <label><input type="checkbox" name="reminders[]" value="0"
-      <%= "checked" if Array(params[:reminders]).include?("0") %> > same day</label>
-    <label><input type="checkbox" name="reminders[]" value="1"
-      <%= "checked" if Array(params[:reminders]).include?("1") %> > 1 day</label>
-    <label><input type="checkbox" name="reminders[]" value="7"
-      <%= "checked" if Array(params[:reminders]).include?("7") %> > 7 days</label>
-    <label><input type="checkbox" name="reminders[]" value="30"
-      <%= "checked" if Array(params[:reminders]).include?("30") %> > 30 days</label>
+        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false }, html: { class: "ical-combo", style: "display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0.5rem 0.35rem 0.35rem; border: 1px solid #cce7d4; background: #eef7f0; border-radius: 999px;" } do |f| %>
+          <button type="submit" class="export-btn export-btn--ical" style="margin: 0;">
+            📅 Export iCal
+          </button>
+          <span style="width: 1px; height: 1.6rem; background: #cce7d4;"></span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; padding-right: 0.25rem;">
+            <span style="font-weight: 600; color: #1f3b2b; margin-right: 0.25rem; font-size: 0.95rem;">Reminders:</span>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
+              <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:reminders]).include?("0") %> /> same day
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
+              <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:reminders]).include?("1") %> /> 1 day
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
+              <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:reminders]).include?("7") %> /> 7 days
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
+              <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:reminders]).include?("30") %> /> 30 days
+            </label>
+          </div>
+        <% end %>
+      </div>
+    </div>
   </div>
-<% end %>
 
-
-  
-
-
-</div>
-
-<!-- Edit Modal -->
-<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 0.5rem; min-width: 400px; max-width: 600px;">
-    <h3 style="margin-top: 0;">Edit Warranty</h3>
-    <form id="editForm">
-      <input type="hidden" id="editWarrantyId" name="id">
-      <div style="margin-bottom: 1rem;">
-        <label for="editProductName" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Product Name</label>
-        <input type="text" id="editProductName" name="product_name" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label for="editMerchant" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Merchant</label>
-        <input type="text" id="editMerchant" name="merchant" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label for="editPurchaseDate" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Purchase Date</label>
-        <input type="date" id="editPurchaseDate" name="purchase_date" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label for="editWarrantyMonths" style="display: block; margin-bottom: 0.25rem; font-weight: 600;">Warranty Length (months)</label>
-        <input type="number" id="editWarrantyMonths" name="warranty_months" min="0" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.25rem;">
-      </div>
-      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-        <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-      </div>
-    </form>
+  <!-- Edit Modal -->
+  <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 0.5rem; min-width: 400px; max-width: 600px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.25rem; font-weight: 700;">Edit Warranty</h3>
+      <form id="editForm">
+        <input type="hidden" id="editWarrantyId" name="id">
+        <div style="margin-bottom: 1rem;">
+          <label for="editProductName" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Product Name</label>
+          <input type="text" id="editProductName" name="product_name" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="editMerchant" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Merchant</label>
+          <input type="text" id="editMerchant" name="merchant" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem;">
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="editPurchaseDate" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Purchase Date</label>
+          <input type="date" id="editPurchaseDate" name="purchase_date" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem;">
+        </div>
+        <div style="margin-bottom: 1.5rem;">
+          <label for="editWarrantyMonths" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Warranty Length (months)</label>
+          <input type="number" id="editWarrantyMonths" name="warranty_months" min="0" style="width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem;">
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button type="button" id="cancelEdit" class="btn-filter btn-reset">Cancel</button>
+          <button type="submit" class="btn-filter btn-apply">Save Changes</button>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
 
-<script>
-(function() {
-  // Handle action button clicks
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('delete-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const warrantyId = e.target.getAttribute('data-warranty-id');
-      const row = e.target.closest('tr');
-      
-      if (warrantyId && row) {
-        deleteWarranty(warrantyId, row);
-      }
-    } else if (e.target.classList.contains('edit-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const warrantyId = e.target.getAttribute('data-warranty-id');
-      const row = e.target.closest('tr');
-      
-      if (warrantyId && row) {
-        editWarranty(warrantyId, row);
-      }
-    }
-  });
-  
-  function editWarranty(warrantyId, row) {
-    const cells = row.querySelectorAll('td');
-    const productName = cells[0].textContent.trim();
-    const merchant = cells[1].textContent.trim();
-    const purchaseDate = cells[2].textContent.trim();
-    const warrantyMonths = cells[3].textContent.replace('~', '').trim();
-    
-    document.getElementById('editWarrantyId').value = warrantyId;
-    document.getElementById('editProductName').value = productName;
-    document.getElementById('editMerchant').value = merchant;
-    document.getElementById('editPurchaseDate').value = purchaseDate;
-    document.getElementById('editWarrantyMonths').value = warrantyMonths;
-    
-    document.getElementById('editModal').style.display = 'block';
-  }
-  
-  function deleteWarranty(warrantyId, row) {
-    const deleteUrl = `/warranties/${warrantyId}`;
-    
-    fetch(deleteUrl, {
-      method: 'DELETE',
-      headers: {
-        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin'
-    })
-    .then(response => {
-      row.style.transition = 'opacity 0.3s ease';
-      row.style.opacity = '0';
-      setTimeout(() => {
-        row.remove();
-        const tbody = document.querySelector('table tbody');
-        if (tbody && tbody.querySelectorAll('tr').length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8">No warranties yet.</td></tr>';
+  <script>
+  (function() {
+    // Handle action button clicks
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('delete-btn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const warrantyId = e.target.getAttribute('data-warranty-id');
+        const row = e.target.closest('tr');
+        
+        if (warrantyId && row && confirm('Are you sure you want to delete this warranty?')) {
+          deleteWarranty(warrantyId, row);
         }
-      }, 300);
-    })
-    .catch(error => {
-      console.error('Error deleting warranty:', error);
-    });
-  }
-  
-  document.getElementById('editForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const warrantyId = formData.get('id');
-    const updateUrl = `/warranties/${warrantyId}`;
-    
-    const updateData = {
-      product_name: formData.get('product_name'),
-      merchant: formData.get('merchant'),
-      purchase_date: formData.get('purchase_date'),
-      warranty_months: formData.get('warranty_months')
-    };
-    
-    fetch(updateUrl, {
-      method: 'PATCH',
-      headers: {
-        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify(updateData)
-    })
-    .then(response => {
-      if (response.ok) {
-        document.getElementById('editModal').style.display = 'none';
-        location.reload();
-      } else {
-        console.error('Failed to update warranty');
+      } else if (e.target.classList.contains('edit-btn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const warrantyId = e.target.getAttribute('data-warranty-id');
+        const row = e.target.closest('tr');
+        
+        if (warrantyId && row) {
+          editWarranty(warrantyId, row);
+        }
       }
-    })
-    .catch(error => {
-      console.error('Error updating warranty:', error);
     });
-  });
-  
-  document.getElementById('cancelEdit').addEventListener('click', () => {
-    document.getElementById('editModal').style.display = 'none';
-  });
-  
-  document.getElementById('editModal').addEventListener('click', (e) => {
-    if (e.target.id === 'editModal') {
-      document.getElementById('editModal').style.display = 'none';
+    
+    function editWarranty(warrantyId, row) {
+      const cells = row.querySelectorAll('td');
+      const productName = cells[0].querySelector('.product-name').textContent.trim();
+      const merchant = cells[3].textContent.trim().replace('—', '');
+      const purchaseDateText = cells[0].textContent.match(/Purchased (.+?) •/);
+      const purchaseDate = purchaseDateText ? purchaseDateText[1] : '';
+      const warrantyMonths = cells[0].textContent.match(/(\d+) months/);
+      const months = warrantyMonths ? warrantyMonths[1] : '';
+      
+      // Try to parse date
+      let dateValue = '';
+      if (purchaseDate) {
+        try {
+          const parsed = new Date(purchaseDate);
+          if (!isNaN(parsed)) {
+            dateValue = parsed.toISOString().split('T')[0];
+          }
+        } catch(e) {}
+      }
+      
+      document.getElementById('editWarrantyId').value = warrantyId;
+      document.getElementById('editProductName').value = productName;
+      document.getElementById('editMerchant').value = merchant;
+      document.getElementById('editPurchaseDate').value = dateValue;
+      document.getElementById('editWarrantyMonths').value = months;
+      
+      document.getElementById('editModal').style.display = 'block';
     }
-  });
-})();
-</script>
-
+    
+    function deleteWarranty(warrantyId, row) {
+      const deleteUrl = `/warranties/${warrantyId}`;
+      
+      fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin'
+      })
+      .then(response => {
+        if (response.ok) {
+          row.style.transition = 'opacity 0.3s ease';
+          row.style.opacity = '0';
+          setTimeout(() => {
+            row.remove();
+            const tbody = document.querySelector('table tbody');
+            if (tbody && tbody.querySelectorAll('tr').length === 0) {
+              location.reload();
+            }
+          }, 300);
+        } else {
+          alert('Failed to delete warranty. Please try again.');
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting warranty:', error);
+        alert('An error occurred. Please try again.');
+      });
+    }
+    
+    document.getElementById('editForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const warrantyId = formData.get('id');
+      const updateUrl = `/warranties/${warrantyId}`;
+      
+      const updateData = {
+        product_name: formData.get('product_name'),
+        merchant: formData.get('merchant'),
+        purchase_date: formData.get('purchase_date'),
+        warranty_months: formData.get('warranty_months')
+      };
+      
+      fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(updateData)
+      })
+      .then(response => {
+        if (response.ok) {
+          document.getElementById('editModal').style.display = 'none';
+          location.reload();
+        } else {
+          alert('Failed to update warranty. Please try again.');
+        }
+      })
+      .catch(error => {
+        console.error('Error updating warranty:', error);
+        alert('An error occurred. Please try again.');
+      });
+    });
+    
+    document.getElementById('cancelEdit').addEventListener('click', () => {
+      document.getElementById('editModal').style.display = 'none';
+    });
+    
+    document.getElementById('editModal').addEventListener('click', (e) => {
+      if (e.target.id === 'editModal') {
+        document.getElementById('editModal').style.display = 'none';
+      }
+    });
+  })();
+  </script>
 </body>
 </html>

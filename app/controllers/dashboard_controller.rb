@@ -4,8 +4,6 @@ class DashboardController < ApplicationController
   before_action :set_gmail_status
 
   def index
-    @title = "Warranty Buddy  -  Iteration 1"
-    @subtitle = "Your Digital Memory for Every Purchase"
 
     @search_term = params[:search]
     @status_filter = params[:status]
