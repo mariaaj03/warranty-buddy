@@ -1,8 +1,8 @@
 require "google/apis/gmail_v1"
 
 class GmailService
-  def initialize(access_token)
-    @fetcher = GmailFetcher.new(access_token)
+  def initialize(access_token, refresh_token = nil, user = nil)
+    @fetcher = GmailFetcher.new(access_token, refresh_token, user)
     @receipt_processor = ReceiptProcessor.new
   end
 

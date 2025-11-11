@@ -162,10 +162,17 @@ class DashboardController < ApplicationController
   end
 
   def parse_gmail_receipts
-    return redirect_to dashboard_path unless @gmail_connected
+    unless @gmail_connected
+      redirect_to dashboard_path, alert: "Please connect your Gmail account first"
+      return
+    end
 
     begin
-      gmail_service = GmailService.new(current_user.gmail_token)
+      gmail_service = GmailService.new(
+        current_user.gmail_token,
+        current_user.gmail_refresh_token,
+        current_user
+      )
       parsed_receipts = gmail_service.parse_receipt_emails
 
       created_count = 0
