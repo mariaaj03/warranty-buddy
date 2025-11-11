@@ -74,16 +74,15 @@ class GmailService
 
   def parse_email_content(html_content, text_content, subject, from, date_header, message_id)
     promotional_keywords = [
-      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
-      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i,
-      /newsletter/i, /marketing/i, /advertisement/i
+      /select items to arrive/i, /last minute gifts/i, /gifts delivered today/i,
+      /newsletter/i, /marketing/i, /advertisement/i, /unsubscribe/i
     ]
     
     return nil if promotional_keywords.any? { |pattern| subject.match?(pattern) }
-    return nil if subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+    return nil if subject.match?(/^(select items|shop now|buy now|save now|deal of|special offer)/i)
     
     merchant = extract_merchant_from_headers(from, html_content, text_content)
-    return nil if merchant == "Digital" || merchant.blank?
+    return nil if merchant == "Digital"
     
     parser_class = MerchantParsers.get_parser(merchant)
 
@@ -133,7 +132,14 @@ class GmailService
         "target.com" => "Target",
         "costco.com" => "Costco",
         "newegg.com" => "Newegg",
-        "bhphotovideo.com" => "B&H Photo"
+        "bhphotovideo.com" => "B&H Photo",
+        "sephora.com" => "Sephora",
+        "nordstrom.com" => "Nordstrom",
+        "victoriassecret.com" => "Victoria's Secret",
+        "macys.com" => "Macy's",
+        "ulta.com" => "Ulta",
+        "zappos.com" => "Zappos",
+        "apple.com" => "Apple"
       }
       return domain_mapping[domain]
     end

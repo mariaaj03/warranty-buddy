@@ -30,23 +30,26 @@ class EmailOrderParser
 
   def is_order_email?
     promotional_keywords = [
-      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
-      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i,
+      /select items to arrive/i, /last minute gifts/i, /gifts delivered today/i,
       /newsletter/i, /marketing/i, /advertisement/i, /unsubscribe/i
     ]
     
     return false if promotional_keywords.any? { |pattern| @subject.match?(pattern) }
     
-    return false if @subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+    return false if @subject.match?(/^(select items|shop now|buy now|save now|deal of|special offer)/i)
     
     has_order_number = extract_order_number.present?
     has_line_items = extract_line_items.any?
     has_total = extract_total_amount.present?
     
-    return false unless has_order_number || (has_line_items && has_total)
-    
     subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking]
-    return true if subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
+    has_receipt_subject = subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
+    
+    if has_receipt_subject
+      return true if has_order_number || has_line_items || has_total
+    end
+    
+    return false unless has_order_number || (has_line_items && has_total)
     
     content_indicators = [
       /order\s+(?:number|#|id)[:\s]+[A-Z0-9\-]{6,}/i,
