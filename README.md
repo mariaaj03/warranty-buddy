@@ -43,6 +43,7 @@ Before running this application, ensure you have the following installed:
 - PostgreSQL 14 or higher
 - Bundler gem
 - Node.js (for asset compilation)
+- Tesseract
 
 ## Setup Instructions
 
@@ -57,6 +58,7 @@ cd warranty-buddy/warranty-buddy
 
 ```bash
 bundle install
+brew install tesseract
 ```
 
 ### 3. Configure Credentials
@@ -71,10 +73,7 @@ Add the following structure:
 
 ```yaml
 google:
-  client_id: YOUR_GOOGLE_CLIENT_ID
-  client_secret: YOUR_GOOGLE_CLIENT_SECRET
-  redirect_uri: http://localhost:3000/auth/google_oauth2/callback
-  gemini_api_key: YOUR_GEMINI_API_KEY
+  .env will send separtly 
 ```
 
 **To obtain credentials:**

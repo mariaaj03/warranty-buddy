@@ -1,30 +1,20 @@
-begin
-  require "pdf-reader"
-  require "rtesseract"
-rescue LoadError => e
-  Rails.logger.warn "PDF/OCR libraries not available: #{e.message}"
-end
 require "tempfile"
 
 class ReceiptProcessor
   def initialize
     @temp_files = []
+    @vision_service = GoogleVisionService.new
+    @ai_service = AiService.new
   end
 
   def process_pdf(pdf_data)
     return nil unless pdf_data.present?
-    return nil unless defined?(PDF::Reader)
 
     begin
-      temp_file = create_temp_file(pdf_data, ".pdf")
-      reader = PDF::Reader.new(temp_file.path)
+      text = @vision_service.extract_text_from_pdf(pdf_data)
+      return nil if text.blank?
 
-      text = ""
-      reader.pages.each do |page|
-        text += page.text + "\n"
-      end
-
-      parse_receipt_text(text)
+      parse_receipt_text_first(text)
     rescue => e
       Rails.logger.error "PDF processing failed: #{e.message}"
       nil
@@ -33,20 +23,21 @@ class ReceiptProcessor
 
   def process_image(image_data, filename = nil)
     return nil unless image_data.present?
-    return nil unless defined?(RTesseract)
 
     begin
-      # Determine file extension
-      ext = determine_image_extension(filename) || ".jpg"
-      temp_file = create_temp_file(image_data, ext)
+      text = @vision_service.extract_text_from_image(image_data)
+      if text.blank?
+        Rails.logger.warn "No text extracted from image. Vision API may not be configured or image may not contain readable text."
+        return nil
+      end
 
-      # Use OCR to extract text
-      image = RTesseract.new(temp_file.path)
-      text = image.to_s
-
-      parse_receipt_text(text)
+      Rails.logger.info "Extracted #{text.length} characters from image"
+      result = parse_receipt_text_first(text)
+      Rails.logger.info "Parsed receipt data: #{result.inspect}" if result
+      result
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
+      Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
   end
@@ -80,6 +71,42 @@ class ReceiptProcessor
 
     # Try to determine from content type or default to jpg
     ".jpg"
+  end
+
+  def parse_receipt_text_first(text)
+    return nil if text.blank?
+
+    result = parse_receipt_text(text)
+    
+    if result && result[:line_items]&.any?
+      result[:product_name] = result[:line_items].first[:name]
+      return result
+    end
+
+    begin
+      ai_result = @ai_service.extract_receipt_info(text)
+      
+      if ai_result && ai_result["is_receipt"] == true
+        product_name = ai_result["product_name"]
+        {
+          product_name: product_name,
+          merchant: ai_result["merchant"],
+          purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+          line_items: [{ name: product_name, quantity: 1, price: nil }],
+          total_amount: nil,
+          order_number: nil,
+          warranty_length_months: ai_result["warranty_length_months"],
+          warranty_type: ai_result["warranty_type"],
+          return_policy_days: ai_result["return_policy_days"],
+          return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+        }
+      else
+        result
+      end
+    rescue => e
+      Rails.logger.warn "AI parsing failed (rate limit?): #{e.message}"
+      result
+    end
   end
 
   def parse_receipt_text(text)
@@ -131,20 +158,84 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    # Look for date patterns
-    date_patterns = [
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
-      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i
+    lines = text.split(/\n|\r\n/).map(&:strip).first(40)
+    
+    excluded_patterns = [
+      /return date/i, /serial number/i, /part number/i, /imei/i,
+      /purchased\s+nov\s+\d{1,2},?\s+\d{4}/i,
+      /purchased\s+\d{1,2}\s+months/i
     ]
+    
+    date_patterns = [
+      /(?:date\/time|date|time)[:\s]*(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/,
+      /(?:date\/time|date|time)[:\s]*((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i,
+      /\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\s+\d{1,2}:\d{2}\s*(?:AM|PM)?/i,
+      /\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\b/i,
+      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4})\b/i,
+      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/
+    ]
+
+    lines.each do |line|
+      excluded_patterns.each do |pattern|
+        next if line.match?(pattern)
+      end
+      
+      next if line.match?(/purchased.*\d+\s+months/i)
+      
+      date_patterns.each do |pattern|
+        if match = line.match(pattern)
+          date_str = match[1] || match[0]
+          
+          if date_str.match?(/\d{1,2}:\d{2}/)
+            date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first
+            date_str = date_str.split(/\s+(?:AM|PM)/i).first if date_str.match?(/\s+(?:AM|PM)/i)
+          end
+          
+          if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
+            date_match = date_str.match(/(\d{4}\/\d{1,2}\/\d{1,2})/)
+            date_str = date_match[1] if date_match
+          end
+          
+          date_str = date_str.strip
+          
+          begin
+            parsed_date = Date.parse(date_str)
+            if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+              Rails.logger.info "Extracted date: #{parsed_date} from line: #{line} (parsed from: #{date_str})"
+              return parsed_date
+            end
+          rescue ArgumentError => e
+            Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
+          end
+        end
+      end
+    end
 
     date_patterns.each do |pattern|
       if match = text.match(pattern)
+        date_str = match[1] || match[0]
+        
+        if date_str.match?(/\d{1,2}:\d{2}/)
+          date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first
+          date_str = date_str.split(/\s+(?:AM|PM)/i).first if date_str.match?(/\s+(?:AM|PM)/i)
+        end
+        
+        if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
+          date_match = date_str.match(/(\d{4}\/\d{1,2}\/\d{1,2})/)
+          date_str = date_match[1] if date_match
+        end
+        
+        date_str = date_str.strip
+        
         begin
-          return Date.parse(match[1])
-        rescue ArgumentError
-          # Try next pattern
+          parsed_date = Date.parse(date_str)
+          if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+            Rails.logger.info "Extracted date: #{parsed_date} from text (parsed from: #{date_str})"
+            return parsed_date
+          end
+        rescue ArgumentError => e
+          Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
         end
       end
     end
@@ -154,38 +245,106 @@ class ReceiptProcessor
 
   def extract_items_from_receipt(text)
     items = []
-
-    # Look for line item patterns
-    line_patterns = [
-      /(\d+)\s+(.{3,80}?)\s+([0-9\.,]+)/,
-      /(.{3,80}?)\s+([0-9\.,]+)/
+    lines = text.split(/\n|\r\n/).map(&:strip).reject(&:blank?)
+    
+    excluded_phrases = [
+      /payment method/i, /purchased/i, /subtotal/i, /total/i, /tax/i, /shipping/i,
+      /discount/i, /order/i, /receipt/i, /merchant/i, /store/i, /thank you/i,
+      /part number/i, /serial number/i, /imei/i, /return date/i, /for support/i,
+      /www\./i, /http/i, /email/i, /phone/i, /address/i, /warranty/i, /months/i
     ]
 
-    line_patterns.each do |pattern|
-      text.scan(pattern).each do |match|
-        if match.length == 3
-          # Pattern with quantity
-          qty = match[0].to_i
-          name = match[1].strip
-          price = parse_price(match[2])
-        else
-          # Pattern without quantity
-          qty = 1
-          name = match[0].strip
-          price = parse_price(match[1])
+    lines.each_with_index do |line, index|
+      next if line.length < 5
+      
+      excluded_phrases.each do |pattern|
+        next if line.match?(pattern)
+      end
+      
+      email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+      next if line.match?(email_pattern)
+      next if line.match?(/^\d+$/)
+      next if line.match?(/^\$/)
+      next if line.match?(/^\d{4}-\d{2}-\d{2}/)
+      next if line.match?(/\d{2}:\d{2}/)
+      
+      if line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/)
+        next_line = lines[index + 1] if index + 1 < lines.length
+        next_next = lines[index + 2] if index + 2 < lines.length
+        
+        if next_line && next_line.match?(/^Part Number:/i)
+          price_line = nil
+          
+          (index + 2..[index + 6, lines.length - 1].min).each do |i|
+            candidate = lines[i]
+            if candidate && candidate.match?(/^\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+              price_line = candidate
+              break
+            end
+          end
+          
+          if price_line
+            price_match = price_line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+            if price_match
+              price = parse_price(price_match[1])
+              if price && price > 0 && price < 100000
+                items << {
+                  name: line,
+                  quantity: 1,
+                  price: price
+                }
+              end
+            end
+          end
         end
-
-        next if name.length < 3 || price.nil?
-
-        items << {
-          name: name,
-          quantity: qty,
-          price: price
-        }
       end
     end
 
-    items.uniq { |item| item[:name] }
+    if items.empty?
+      lines.each_with_index do |line, index|
+        next if line.length < 3
+        next if line.match?(/^(payment method|purchased|subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial|imei|return|for support|www\.|http)/i)
+        
+        email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+        next if line.match?(email_pattern)
+        
+        price_match = line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+        if price_match
+          price = parse_price(price_match[1])
+          next unless price && price > 0 && price < 100000
+          
+          (1..8).each do |offset|
+            prev_index = index - offset
+            next if prev_index < 0
+            
+            prev_line = lines[prev_index]
+            next if prev_line.blank?
+            
+            excluded_phrases.each do |pattern|
+              next if prev_line.match?(pattern)
+            end
+            
+            next if prev_line.match?(email_pattern)
+            next if prev_line.match?(/^\d+$/)
+            next if prev_line.match?(/^\$/)
+            next if prev_line.match?(/^\d{4}-\d{2}-\d{2}/)
+            next if prev_line.match?(/\d{2}:\d{2}/)
+            next if prev_line.match?(/^(part number|serial|imei|return|for support)/i)
+            
+            if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/) && !prev_line.match?(/^\d+$/)
+              items << {
+                name: prev_line,
+                quantity: 1,
+                price: price
+              }
+              break
+            end
+          end
+        end
+      end
+    end
+
+    items.uniq { |item| item[:name] }.first(5)
   end
 
   def extract_total_from_receipt(text)

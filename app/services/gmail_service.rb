@@ -12,7 +12,6 @@ class GmailService
     begin
       Rails.logger.info "🔍 Starting Gmail receipt parsing for user: #{user_id}"
 
-      # Get order messages using focused queries
       messages = @fetcher.list_order_messages(user_id, 50)
       Rails.logger.info "📊 Found #{messages.length} order messages"
 
@@ -25,18 +24,14 @@ class GmailService
           Rails.logger.info "📧 Processing message #{index + 1}/#{messages.length} (ID: #{message.id})"
           full_message = @fetcher.get_message(message.id, user_id)
 
-          # Extract headers
           subject = extract_header(full_message, "Subject") || ""
           from = extract_header(full_message, "From") || ""
           date_header = extract_header(full_message, "Date")
 
           Rails.logger.info "📧 Subject: '#{subject}' from #{from}"
 
-          # Extract content
           html_content = @fetcher.extract_html_from_message(full_message)
           text_content = @fetcher.extract_text_from_message(full_message)
-
-          # Parse the email
           parsed_receipt = parse_email_content(html_content, text_content, subject, from, date_header, full_message.id)
           processed_count += 1
 
@@ -48,7 +43,6 @@ class GmailService
             Rails.logger.info "❌ Not a valid receipt"
           end
 
-          # Process attachments if any
           attachments = @fetcher.extract_attachments(full_message)
           if attachments.any?
             Rails.logger.info "📎 Found #{attachments.length} attachments, processing..."
@@ -79,35 +73,59 @@ class GmailService
   end
 
   def parse_email_content(html_content, text_content, subject, from, date_header, message_id)
-    # First try merchant-specific parsing
+    promotional_keywords = [
+      /select items to arrive/i, /last minute gifts/i, /gifts delivered today/i,
+      /newsletter/i, /marketing/i, /advertisement/i, /unsubscribe/i
+    ]
+    
+    return nil if promotional_keywords.any? { |pattern| subject.match?(pattern) }
+    return nil if subject.match?(/^(select items|shop now|buy now|save now|deal of|special offer)/i)
+    
     merchant = extract_merchant_from_headers(from, html_content, text_content)
+    return nil if merchant == "Digital"
+    
     parser_class = MerchantParsers.get_parser(merchant)
 
     parsed_data = parser_class.parse(html_content, text_content)
 
-    # If merchant-specific parsing failed, try generic parsing
+    generic_parser = nil
     if parsed_data.nil?
       generic_parser = EmailOrderParser.new(html_content, text_content, subject, from)
       parsed_data = generic_parser.parse
     end
 
     return nil unless parsed_data
-
-    # Convert to our expected format
+    
     line_items = parsed_data[:line_items] || []
+    order_number = parsed_data[:order_number]
+    
+    if order_number.blank?
+      generic_parser ||= EmailOrderParser.new(html_content, text_content, subject, from)
+      order_number = generic_parser.extract_order_number_from_subject
+    end
+    
+    return nil if line_items.empty? && order_number.blank?
+    
     primary_item = line_items.first
+    product_name = primary_item&.dig(:name)
+    
+    if product_name.blank? && order_number.present?
+      product_name = "Order #{order_number}"
+    end
+    
+    return nil if product_name.blank?
 
     {
-      product_name: primary_item&.dig(:name) || extract_product_name_from_subject(subject),
-      merchant: parsed_data[:merchant] || extract_merchant_from_headers(from, html_content, text_content),
+      product_name: product_name,
+      merchant: parsed_data[:merchant] || merchant || "Unknown",
       purchase_date: parsed_data[:purchase_date] || parse_email_date(date_header) || Date.today,
-      warranty_months: determine_warranty_length(parsed_data[:merchant], primary_item&.dig(:name)),
+      warranty_months: determine_warranty_length(parsed_data[:merchant] || merchant, product_name),
       warranty_type: "manufacturer",
-      return_policy_days: determine_return_policy(parsed_data[:merchant]),
+      return_policy_days: determine_return_policy(parsed_data[:merchant] || merchant),
       return_deadline: nil,
       source: "gmail_parsed",
       raw_email_id: message_id,
-      order_number: parsed_data[:order_number],
+      order_number: order_number || parsed_data[:order_number],
       total_amount: parsed_data[:total_amount]
     }
   end
@@ -126,7 +144,14 @@ class GmailService
         "target.com" => "Target",
         "costco.com" => "Costco",
         "newegg.com" => "Newegg",
-        "bhphotovideo.com" => "B&H Photo"
+        "bhphotovideo.com" => "B&H Photo",
+        "sephora.com" => "Sephora",
+        "nordstrom.com" => "Nordstrom",
+        "victoriassecret.com" => "Victoria's Secret",
+        "macys.com" => "Macy's",
+        "ulta.com" => "Ulta",
+        "zappos.com" => "Zappos",
+        "apple.com" => "Apple"
       }
       return domain_mapping[domain]
     end
@@ -153,23 +178,29 @@ class GmailService
   def extract_product_name_from_subject(subject)
     return "Unknown Product" if subject.blank?
 
-    # Try to extract product name from subject
+    promotional_keywords = [
+      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
+      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i
+    ]
+    
+    return "Unknown Product" if promotional_keywords.any? { |pattern| subject.match?(pattern) }
+    return "Unknown Product" if subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+
     patterns = [
       /receipt for\s+(.+)/i,
       /order\s+for\s+(.+)/i,
-      /order\s+(.+)/i,
       /your order of\s+(.+)/i,
-      /purchase\s+of\s+(.+)/i,
-      /purchase\s+(.+)/i
+      /purchase\s+of\s+(.+)/i
     ]
 
     patterns.each do |pattern|
       if match = subject.match(pattern)
-        return match[1].strip[0..120]
+        product = match[1].strip[0..120]
+        return product unless promotional_keywords.any? { |pat| product.match?(pat) }
       end
     end
 
-    subject.strip[0..120]
+    "Unknown Product"
   end
 
   def parse_email_date(date_string)
@@ -247,7 +278,11 @@ class GmailService
         next unless attachment_data&.data
 
         # Decode attachment data
-        decoded_data = Base64.urlsafe_decode64(attachment_data.data)
+        begin
+          decoded_data = Base64.urlsafe_decode64(attachment_data.data)
+        rescue ArgumentError
+          decoded_data = Base64.decode64(attachment_data.data)
+        end
 
         # Process based on file type
         if attachment[:mime_type] == "application/pdf"

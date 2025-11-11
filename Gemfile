@@ -40,6 +40,24 @@ gem "thruster", require: false
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 gem "image_processing", "~> 1.2"
 
+# Authentication
+gem "devise"
+gem "omniauth"
+gem "omniauth-google-oauth2"
+gem "omniauth-rails_csrf_protection"
+
+# Google API client (needed for Gmail integration)
+gem "google-api-client"
+
+# AI and search
+gem "gemini-ai", "~> 4.3.0"
+
+# PDF processing for receipt uploads
+gem "pdf-reader"
+
+# Calendar exports
+gem "icalendar"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
@@ -57,20 +75,13 @@ group :development, :test do
   gem "cucumber-rails", require: false
   gem "factory_bot_rails"
 
-  gem "omniauth"
-  gem "omniauth-google-oauth2"
-  gem "omniauth-rails_csrf_protection"
-  gem "google-api-client"
   gem "attr_encrypted"
   gem "sidekiq"
-  gem "gemini-ai", "~> 4.3.0"
   gem "nokogiri"
   gem "mail"
-  gem "pdf-reader"
   gem "rtesseract"
   gem "chronic"
   gem "money"
-  gem "icalendar"
   gem "dotenv-rails", groups: [ :development, :test ]
 end
 

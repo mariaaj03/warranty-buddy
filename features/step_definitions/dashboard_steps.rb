@@ -10,7 +10,7 @@ end
 Given("I have connected my Gmail account") do
   mock_google_oauth_success
   simulate_oauth_callback
-end
+end 
 
 Given("I have not connected my Gmail account") do
   clear_oauth_mocks

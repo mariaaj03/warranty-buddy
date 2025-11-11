@@ -9,10 +9,10 @@ end
 
 class EmailOrderParser
   def initialize(html_content, text_content = nil, subject = nil, from = nil)
-    @html = html_content || ""
-    @text = text_content || extract_text_from_html(@html)
-    @subject = subject || ""
-    @from = from || ""
+    @html = (html_content || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @text = (text_content || extract_text_from_html(@html)).to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @subject = (subject || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @from = (from || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     @doc = Nokogiri::HTML(@html)
   end
 
@@ -29,22 +29,57 @@ class EmailOrderParser
   end
 
   def is_order_email?
-    # Check subject for order keywords
-    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking purchase bought]
-    return true if subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
-
-    # Check content for order indicators
+    promotional_keywords = [
+      /select items to arrive/i, /last minute gifts/i, /gifts delivered today/i,
+      /newsletter/i, /marketing/i, /advertisement/i, /unsubscribe/i
+    ]
+    
+    return false if promotional_keywords.any? { |pattern| @subject.match?(pattern) }
+    
+    return false if @subject.match?(/^(select items|shop now|buy now|save now|deal of|special offer)/i)
+    
+    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking e-receipt package]
+    has_receipt_subject = subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
+    
+    subject_order_patterns = [
+      /your (order|receipt|e-receipt)/i,
+      /order\s*#\s*[A-Z0-9\-]{4,}/i,
+      /receipt\s+for/i,
+      /package from order/i,
+      /on the way.*order/i,
+      /your.*order.*has arrived/i
+    ]
+    
+    has_order_in_subject = subject_order_patterns.any? { |pattern| @subject.match?(pattern) }
+    
+    if has_receipt_subject || has_order_in_subject
+      has_order_number = extract_order_number.present? || extract_order_number_from_subject.present?
+      has_line_items = extract_line_items.any?
+      has_total = extract_total_amount.present?
+      
+      if has_order_number || has_line_items || has_total
+        return true
+      end
+      
+      if has_order_in_subject
+        return true
+      end
+    end
+    
+    has_order_number = extract_order_number.present?
+    has_line_items = extract_line_items.any?
+    has_total = extract_total_amount.present?
+    
+    return true if has_order_number || (has_line_items && has_total)
+    
     content_indicators = [
-      /order\s+(?:number|#|id)/i,
-      /receipt/i,
-      /invoice/i,
-      /confirmation/i,
-      /shipped/i,
-      /delivered/i,
-      /tracking/i,
-      /purchase/i,
-      /total.*\$?\d+\.?\d*/i,
-      /subtotal.*\$?\d+\.?\d*/i
+      /order\s+(?:number|#|id)[:\s]+[A-Z0-9\-]{6,}/i,
+      /receipt\s+(?:number|#)/i,
+      /invoice\s+(?:number|#)/i,
+      /confirmation\s+(?:number|#)/i,
+      /tracking\s+(?:number|#)/i,
+      /total[:\s]*\$?\d+\.?\d*/i,
+      /subtotal[:\s]*\$?\d+\.?\d*/i
     ]
 
     content_indicators.any? { |pattern| @text.match?(pattern) }
@@ -88,6 +123,22 @@ class EmailOrderParser
 
     order_patterns.each do |pattern|
       if match = @text.match(pattern)
+        return match[1].strip
+      end
+    end
+
+    extract_order_number_from_subject
+  end
+
+  def extract_order_number_from_subject
+    order_patterns = [
+      /order\s*#\s*([A-Z0-9\-]{4,40})/i,
+      /order\s+(?:number|#|id)[:\s]*([A-Z0-9\-]{4,40})/i,
+      /#\s*([A-Z0-9\-]{4,40})/i
+    ]
+
+    order_patterns.each do |pattern|
+      if match = @subject.match(pattern)
         return match[1].strip
       end
     end

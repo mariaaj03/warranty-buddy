@@ -1,23 +1,28 @@
+require "net/http"
+require "json"
+require "uri"
+require "cgi"
+
+class GeminiRateLimitError < StandardError
+  attr_reader :retry_delay
+
+  def initialize(message, retry_delay = nil)
+    super(message)
+    @retry_delay = retry_delay
+  end
+end
+
 class AiService
   def initialize(client = nil)
     if client
       @client = client
+      @api_key = nil
     else
-      begin
-        require "gemini-ai"
-        @client = Gemini.new(
-          credentials: {
-            service: "generative-language-api",
-            api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
-          },
-          options: { model: "gemini-2.0-flash", server_sent_events: false }
-        )
-      rescue LoadError => e
-        Rails.logger.error "Gemini AI gem not available: #{e.message}"
-        @client = nil
-      rescue => e
-        Rails.logger.error "Gemini AI client initialization failed: #{e.message}"
-        @client = nil
+      @api_key = ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
+      @client = @api_key.present? ? :rest_api : nil
+      
+      unless @api_key.present?
+        Rails.logger.error "Gemini API key not found in credentials or environment"
       end
     end
   end
@@ -62,11 +67,7 @@ class AiService
 
     Rails.logger.debug "📝 Prompt length: #{prompt.length}"
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
+    response_text = call_gemini_api(prompt)
     Rails.logger.debug "🤖 AI Response: #{response_text}"
 
     # Clean up markdown code blocks if present
@@ -107,13 +108,7 @@ class AiService
       Be conservative and only include information you're confident about.
     PROMPT
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-
-    # Clean up markdown code blocks if present
+    response_text = call_gemini_api(prompt)
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     JSON.parse(response_text)
@@ -138,18 +133,118 @@ class AiService
       Warranty Terms: #{warranty_terms}
     PROMPT
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-
-    # Clean up markdown code blocks if present
+    response_text = call_gemini_api(prompt)
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     JSON.parse(response_text)
   rescue => e
     Rails.logger.error "AI warranty eligibility check failed: #{e.message}"
     nil
+  end
+
+  def answer_warranty_question(question, search_results = nil)
+    return nil unless @client
+
+    search_context = ""
+    if search_results && search_results.any?
+      search_context = "\n\nRelevant information from web search:\n"
+      search_results.first(5).each_with_index do |result, idx|
+        search_context += "#{idx + 1}. #{result[:title]}\n   #{result[:snippet]}\n   Source: #{result[:url]}\n\n"
+      end
+    end
+
+    prompt = <<~PROMPT
+      You are a helpful warranty assistant. Answer the user's question about warranty coverage, product issues, or warranty policies.
+
+      Be specific, helpful, and cite sources when available. If you're not certain, say so.
+
+      User Question: #{question}
+      #{search_context}
+
+      Provide a clear, concise answer. If the question is about a specific product issue (like water damage, breakage, etc.), explain:
+      1. Whether it's typically covered under warranty
+      2. Why or why not
+      3. What the user should do next
+      4. Any relevant warranty terms or exclusions
+
+      Format your response as plain text (no markdown). Be conversational but informative.
+    PROMPT
+
+    response_text = call_gemini_api(prompt)
+    response_text&.strip || "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
+  rescue => e
+    Rails.logger.error "AI warranty question answering failed: #{e.message}"
+    Rails.logger.error e.backtrace.first(5).join("\n")
+    raise e
+  end
+
+  private
+
+  def call_gemini_api(prompt, retry_count = 0)
+    api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
+    return nil unless api_key.present?
+
+    uri = URI("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=#{CGI.escape(api_key)}")
+    
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    
+    request = Net::HTTP::Post.new(uri.request_uri)
+    request["Content-Type"] = "application/json"
+    request.body = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }]
+    }.to_json
+
+    response = http.request(request)
+    
+    if response.code == "200"
+      result = JSON.parse(response.body)
+      result.dig("candidates", 0, "content", "parts", 0, "text") || ""
+    elsif response.code == "429"
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "Rate limit exceeded"
+      retry_delay = extract_retry_delay(error_data)
+      
+      max_retry_delay = 10
+      if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
+        Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
+        sleep(retry_delay)
+        return call_gemini_api(prompt, retry_count + 1)
+      end
+      
+      raise GeminiRateLimitError.new(error_message, retry_delay)
+    else
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "API error"
+      Rails.logger.error "Gemini API error: #{response.code} - #{error_message}"
+      raise "Gemini API error: #{response.code} - #{error_message}"
+    end
+  rescue JSON::ParserError => e
+    Rails.logger.error "Gemini API response parse error: #{e.message}"
+    raise "Gemini API error: Invalid response format"
+  rescue GeminiRateLimitError
+    raise
+  rescue => e
+    Rails.logger.error "Gemini API call failed: #{e.message}"
+    raise e
+  end
+
+  def extract_retry_delay(error_data)
+    retry_info = error_data.dig("error", "details")&.find { |d| d["@type"] == "type.googleapis.com/google.rpc.RetryInfo" }
+    if retry_info && retry_info["retryDelay"]
+      delay_str = retry_info["retryDelay"].to_s
+      if delay_str.match?(/^\d+\.?\d*s?$/)
+        seconds = delay_str.gsub(/s$/, "").to_f
+        seconds > 0 ? seconds : nil
+      else
+        nil
+      end
+    else
+      nil
+    end
   end
 end

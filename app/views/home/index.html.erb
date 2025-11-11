@@ -1,0 +1,137 @@
+<div class="landing-page">
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Warranty Buddy</span>
+      </div>
+      <div class="nav-actions">
+        <%= link_to "Sign In", new_user_session_path, class: "btn-nav" %>
+        <%= link_to "Get Started", user_google_oauth2_omniauth_authorize_path, method: :post, class: "btn-nav btn-primary-nav", data: { turbo: false } %>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1 class="hero-title">Your Digital Memory for Every Purchase</h1>
+      <p class="hero-subtitle">
+        Never miss a warranty claim again. Automatically track all your product warranties 
+        from your email receipts and get reminders before they expire.
+      </p>
+      <div class="hero-actions">
+        <%= link_to user_google_oauth2_omniauth_authorize_path, method: :post, class: "btn-hero btn-hero-primary", data: { turbo: false } do %>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continue with Google
+        <% end %>
+        <%= link_to new_user_session_path, class: "btn-hero btn-hero-secondary" do %>
+          Sign In with Email
+        <% end %>
+      </div>
+    </div>
+    <div class="hero-image">
+      <div class="hero-visual">
+        <div class="card-visual card-1">
+          <div class="card-header">📱 iPhone 15 Pro</div>
+          <div class="card-body">
+            <div class="card-row">
+              <span>Warranty:</span>
+              <span class="status-active">Active</span>
+            </div>
+            <div class="card-row">
+              <span>Expires:</span>
+              <span>Dec 15, 2025</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-visual card-2">
+          <div class="card-header">💻 MacBook Pro</div>
+          <div class="card-body">
+            <div class="card-row">
+              <span>Warranty:</span>
+              <span class="status-active">Active</span>
+            </div>
+            <div class="card-row">
+              <span>Expires:</span>
+              <span>Mar 20, 2026</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-visual card-3">
+          <div class="card-header">🔌 AirPods Pro</div>
+          <div class="card-body">
+            <div class="card-row">
+              <span>Warranty:</span>
+              <span class="status-expiring">Expiring Soon</span>
+            </div>
+            <div class="card-row">
+              <span>Expires:</span>
+              <span>Jan 5, 2025</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="features-container">
+      <h2 class="features-title">Why Warranty Buddy?</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📧</div>
+          <h3 class="feature-title">Automatic Discovery</h3>
+          <p class="feature-description">
+            Connect your Gmail and we'll automatically find purchase receipts 
+            from Amazon, Best Buy, and other retailers.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔔</div>
+          <h3 class="feature-title">Smart Reminders</h3>
+          <p class="feature-description">
+            Get notified before your warranties expire so you never miss a 
+            free repair or replacement.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3 class="feature-title">Warranty Checker</h3>
+          <p class="feature-description">
+            Describe your product issue and we'll tell you if it's covered 
+            by your warranty.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">Privacy First</h3>
+          <p class="feature-description">
+            We only store essential warranty information. Your emails stay 
+            private and you can revoke access anytime.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="cta-container">
+      <h2 class="cta-title">Ready to never lose a warranty again?</h2>
+      <p class="cta-subtitle">Get started in seconds with your Google account</p>
+      <%= link_to user_google_oauth2_omniauth_authorize_path, method: :post, class: "btn-cta", data: { turbo: false } do %>
+        Get Started Free
+      <% end %>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-container">
+      <p>&copy; 2025 Warranty Buddy. All rights reserved.</p>
+    </div>
+  </footer>
+</div>

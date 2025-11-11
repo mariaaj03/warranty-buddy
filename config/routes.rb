@@ -1,9 +1,13 @@
 Rails.application.routes.draw do
-  root "dashboard#index"
-
-  # OAuth callback & failure
-  get "/auth/:provider/callback", to: "dashboard#google_auth"
-  get "/auth/failure", to: "dashboard#oauth_failure"
+  root "home#index"
+  
+  # Devise routes
+  devise_for :users, controllers: {
+    omniauth_callbacks: "users/omniauth_callbacks"
+  }
+  
+  # Dashboard routes (require authentication)
+  get "dashboard", to: "dashboard#index", as: :dashboard
 
   # csv/ical routes
   resources :products, only: [] do
@@ -14,13 +18,13 @@ Rails.application.routes.draw do
     collection do
       get :export                  # CSV
       get :calendar, defaults: { format: :ics }  # iCal
+      post :export_to_google_calendar  # Google Calendar
     end
   end
 
 
 
-  # Dashboard routes
-  get "dashboard/index"
+  # Dashboard routes (require authentication)
   get "dashboard/connect_gmail"
   get "dashboard/upload"
   post "/upload", to: "dashboard#upload"
@@ -34,4 +38,6 @@ Rails.application.routes.draw do
   delete "/warranties/:id", to: "dashboard#delete_warranty", as: :delete_warranty
   patch "/warranties/:id", to: "dashboard#update_warranty", as: :update_warranty
   patch '/update_warranty/:id', to: 'dashboard#update_warranty'
+  
+  post "/chatbot/ask", to: "chatbot#ask", as: :chatbot_ask
 end

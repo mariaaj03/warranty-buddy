@@ -14,15 +14,12 @@ class GmailFetcher
     @service
   end
 
-  # List messages matching specific order/receipt queries
   def list_order_messages(user_id = "me", max_results = 100)
     Rails.logger.info "🔍 Fetching order messages for user: #{user_id}"
 
-    # Focused queries for order confirmations
     queries = [
-      "in:inbox subject:(order OR receipt OR invoice OR confirmation) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com OR newegg.com OR bhphotovideo.com) newer_than:1y",
-      "in:inbox subject:(shipped OR delivered OR tracking) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com) newer_than:1y",
-      "in:inbox subject:(purchase OR bought) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com) newer_than:1y"
+      "in:inbox subject:(order OR receipt OR invoice OR confirmation OR shipped OR delivered OR tracking OR e-receipt) -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing OR unsubscribe OR pre-order OR preorder) newer_than:2y",
+      "in:inbox subject:(\"your order\" OR \"your receipt\" OR \"your e-receipt\" OR \"order #\" OR \"receipt for\" OR \"package from order\") -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing) newer_than:2y"
     ]
 
     all_messages = []
@@ -33,7 +30,6 @@ class GmailFetcher
       break if all_messages.length >= max_results
     end
 
-    # Remove duplicates
     unique_messages = all_messages.uniq { |msg| msg.id }
     Rails.logger.info "📊 Found #{unique_messages.length} unique order messages"
     unique_messages.first(max_results)
@@ -51,7 +47,8 @@ class GmailFetcher
     end
 
     if payload.parts
-      find_html_part(payload.parts)
+      result = find_html_part(payload.parts)
+      return result.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     else
       ""
     end
@@ -65,7 +62,8 @@ class GmailFetcher
     end
 
     if payload.parts
-      find_text_part(payload.parts)
+      result = find_text_part(payload.parts)
+      return result.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     else
       ""
     end
@@ -115,15 +113,20 @@ class GmailFetcher
   end
 
   def base64_decode(data)
-    Base64.urlsafe_decode64(data)
+    decoded = Base64.urlsafe_decode64(data)
+    decoded.force_encoding("UTF-8")
+    decoded.encode("UTF-8", invalid: :replace, undef: :replace)
   rescue ArgumentError
-    Base64.decode64(data)
+    decoded = Base64.decode64(data)
+    decoded.force_encoding("UTF-8")
+    decoded.encode("UTF-8", invalid: :replace, undef: :replace)
   end
 
   def find_html_part(parts)
     parts.each do |part|
       if part.mime_type == "text/html" && part.body && part.body.data
-        return base64_decode(part.body.data)
+        html = base64_decode(part.body.data)
+        return html.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
       elsif part.parts
         result = find_html_part(part.parts)
         return result if result.present?
@@ -135,7 +138,8 @@ class GmailFetcher
   def find_text_part(parts)
     parts.each do |part|
       if part.mime_type == "text/plain" && part.body && part.body.data
-        return base64_decode(part.body.data)
+        text = base64_decode(part.body.data)
+        return text.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
       elsif part.parts
         result = find_text_part(part.parts)
         return result if result.present?
