@@ -173,8 +173,11 @@ class AiService
         "return_deadline": "YYYY-MM-DD format" (specific return deadline date, if mentioned),
       }
 
-      IMPORTANT: Extract the actual product name from the receipt (e.g., "SMLSS HIPSTER", "iPhone 15 Pro", etc.), not generic terms like "Order" or "Receipt".
-      Default to 12 months warranty if not specified. Extract the purchase date from the receipt.
+      IMPORTANT: 
+      - Extract the actual product name from the receipt (e.g., "SMLSS HIPSTER", "iPhone 15 Pro", etc.), NOT generic terms like "Order", "Receipt", "Customer Service", "Contact Us", "Help", "Support", "Returns", "Payment Method", etc.
+      - For purchase dates in M/D/YY or M/D/YYYY format (e.g., "10/20/25" or "10/20/2025"), interpret as month/day/year (US format).
+      - Default to 12 months warranty if not specified. Extract the purchase date from the receipt.
+      - Return dates in YYYY-MM-DD format (e.g., "2025-10-20" for October 20, 2025).
     PROMPT
 
     response_text = call_gemini_api_with_image(prompt, image_base64)
