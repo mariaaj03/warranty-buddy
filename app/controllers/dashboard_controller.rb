@@ -50,7 +50,7 @@ class DashboardController < ApplicationController
       file_data = uploaded_file.read
       file_extension = File.extname(uploaded_file.original_filename).downcase
 
-      receipt_processor = ReceiptProcessor.new
+      receipt_processor = ReceiptProcessor.new(current_user)
       begin
         if file_extension == ".pdf"
           receipt_data = receipt_processor.process_pdf(file_data)
@@ -69,8 +69,10 @@ class DashboardController < ApplicationController
 
       if receipt_data.nil? && extraction_error.nil?
         vision_api_key = Rails.application.credentials.dig(:google, :vision_api_key) || ENV["GOOGLE_VISION_API_KEY"]
-        if vision_api_key.blank?
-          extraction_error = "Could not extract information from receipt. Vision API is not configured. Please enter details manually or configure Google Vision API key."
+        has_oauth = current_user&.gmail_token.present? && current_user&.gmail_refresh_token.present?
+        
+        if vision_api_key.blank? && !has_oauth
+          extraction_error = "Could not extract information from receipt. Vision API is not configured. To fix this: 1) Go to https://console.cloud.google.com/apis/credentials 2) Click 'Create Credentials' → 'API Key' 3) Copy the key and add it to your credentials as 'vision_api_key' under 'google', or set GOOGLE_VISION_API_KEY environment variable. Alternatively, connect your Gmail account to use OAuth credentials."
         else
           extraction_error = "Could not extract information from receipt. The image may be unclear or the format is not recognized. Please enter details manually."
         end

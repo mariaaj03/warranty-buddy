@@ -1,9 +1,9 @@
 require "tempfile"
 
 class ReceiptProcessor
-  def initialize
+  def initialize(user = nil)
     @temp_files = []
-    @vision_service = GoogleVisionService.new
+    @vision_service = GoogleVisionService.new(nil, user)
     @ai_service = AiService.new
   end
 
