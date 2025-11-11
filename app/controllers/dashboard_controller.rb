@@ -72,6 +72,39 @@ class DashboardController < ApplicationController
       return
     end
 
+    def upload_receipt
+      # Use gmail_uid if connected, otherwise use a default test user
+      user_id = session[:gmail_uid] || "test_user"
+    
+      uploaded_file = params[:receipt_image]
+      
+      if uploaded_file.nil?
+        flash[:alert] = "Please select a receipt image to upload"
+        redirect_to root_path and return
+      end
+    
+      # Create a product with placeholder values - user can edit later
+      product = Product.new(
+        gmail_uid: user_id,
+        product_name: "Receipt: #{uploaded_file.original_filename}",
+        merchant: "Unknown Merchant",
+        purchase_date: Date.today,
+        warranty_months: 12,
+        receipt_email_id: "manual_upload_#{Time.now.to_i}"
+      )
+      
+      if product.save
+        flash[:notice] = " Receipt uploaded! Please edit the product details to add accurate information."
+      else
+        flash[:alert] = "Failed to save product: #{product.errors.full_messages.join(', ')}"
+      end
+      
+      redirect_to root_path
+    rescue => e
+      flash[:alert] = "Error processing receipt: #{e.message}"
+      redirect_to root_path
+    end
+
     unless @gmail_connected && session[:gmail_uid]
       redirect_to root_path, alert: "Please connect your Gmail account first"
       return

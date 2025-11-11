@@ -230,6 +230,22 @@
     </div>
   </details>
 
+  <!-- Manual Receipt Upload Section -->
+<details class="section">
+  <summary>Upload Receipt Image</summary>
+  <div style="margin-top:.75rem;">
+    <p style="color: #666; margin-bottom: .75rem;">Upload a photo of your receipt and we'll extract warranty information automatically</p>
+    
+    <form action="/upload_receipt" method="post" enctype="multipart/form-data">
+      <%= csrf_meta_tags %>
+      <label>Receipt Image (JPG, PNG, HEIC)
+        <input type="file" name="receipt_image" accept="image/*" required style="margin-top: .5rem;" />
+      </label>
+      <button type="submit" class="btn btn-primary" style="margin-top: .75rem;">Process Receipt</button>
+    </form>
+  </div>
+</details>
+
   
 
   <h3>Warranties</h3>

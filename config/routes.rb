@@ -24,6 +24,7 @@ Rails.application.routes.draw do
   get "dashboard/connect_gmail"
   get "dashboard/upload"
   post "/upload", to: "dashboard#upload"
+  post "/upload_receipt", to: "dashboard#upload_receipt"
   get "dashboard/api_warranties"
   get "dashboard/api_health"
   get "dashboard/reset"
