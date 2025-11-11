@@ -18,9 +18,8 @@ class GmailFetcher
     Rails.logger.info "🔍 Fetching order messages for user: #{user_id}"
 
     queries = [
-      "in:inbox subject:(order OR receipt OR invoice OR confirmation) -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com OR newegg.com OR bhphotovideo.com OR sephora.com OR nordstrom.com OR victoriassecret.com OR macys.com OR ulta.com OR zappos.com OR apple.com) newer_than:2y",
-      "in:inbox subject:(shipped OR delivered OR tracking) -subject:(select OR shop OR sale OR deal OR offer OR promo) from:(amazon.com OR bestbuy.com OR walmart.com OR target.com OR costco.com OR sephora.com OR nordstrom.com OR victoriassecret.com) newer_than:2y",
-      "in:inbox subject:(order OR receipt OR invoice OR confirmation) -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing OR unsubscribe) has:nouserlabels newer_than:2y"
+      "in:inbox subject:(order OR receipt OR invoice OR confirmation OR shipped OR delivered OR tracking OR e-receipt) -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing OR unsubscribe OR pre-order OR preorder) newer_than:2y",
+      "in:inbox subject:(\"your order\" OR \"your receipt\" OR \"your e-receipt\" OR \"order #\" OR \"receipt for\" OR \"package from order\") -subject:(select OR shop OR sale OR deal OR offer OR promo OR newsletter OR marketing) newer_than:2y"
     ]
 
     all_messages = []

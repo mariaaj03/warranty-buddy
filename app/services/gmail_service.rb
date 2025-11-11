@@ -88,6 +88,7 @@ class GmailService
 
     parsed_data = parser_class.parse(html_content, text_content)
 
+    generic_parser = nil
     if parsed_data.nil?
       generic_parser = EmailOrderParser.new(html_content, text_content, subject, from)
       parsed_data = generic_parser.parse
@@ -96,24 +97,35 @@ class GmailService
     return nil unless parsed_data
     
     line_items = parsed_data[:line_items] || []
-    return nil if line_items.empty? && parsed_data[:order_number].blank?
+    order_number = parsed_data[:order_number]
+    
+    if order_number.blank?
+      generic_parser ||= EmailOrderParser.new(html_content, text_content, subject, from)
+      order_number = generic_parser.extract_order_number_from_subject
+    end
+    
+    return nil if line_items.empty? && order_number.blank?
     
     primary_item = line_items.first
     product_name = primary_item&.dig(:name)
     
-    return nil if product_name.blank? && parsed_data[:order_number].blank?
+    if product_name.blank? && order_number.present?
+      product_name = "Order #{order_number}"
+    end
+    
+    return nil if product_name.blank?
 
     {
-      product_name: product_name || "Order #{parsed_data[:order_number]}",
+      product_name: product_name,
       merchant: parsed_data[:merchant] || merchant || "Unknown",
       purchase_date: parsed_data[:purchase_date] || parse_email_date(date_header) || Date.today,
-      warranty_months: determine_warranty_length(parsed_data[:merchant], product_name),
+      warranty_months: determine_warranty_length(parsed_data[:merchant] || merchant, product_name),
       warranty_type: "manufacturer",
-      return_policy_days: determine_return_policy(parsed_data[:merchant]),
+      return_policy_days: determine_return_policy(parsed_data[:merchant] || merchant),
       return_deadline: nil,
       source: "gmail_parsed",
       raw_email_id: message_id,
-      order_number: parsed_data[:order_number],
+      order_number: order_number || parsed_data[:order_number],
       total_amount: parsed_data[:total_amount]
     }
   end

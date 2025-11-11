@@ -38,22 +38,39 @@ class EmailOrderParser
     
     return false if @subject.match?(/^(select items|shop now|buy now|save now|deal of|special offer)/i)
     
+    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking e-receipt package]
+    has_receipt_subject = subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
+    
+    subject_order_patterns = [
+      /your (order|receipt|e-receipt)/i,
+      /order\s*#\s*[A-Z0-9\-]{4,}/i,
+      /receipt\s+for/i,
+      /package from order/i,
+      /on the way.*order/i,
+      /your.*order.*has arrived/i
+    ]
+    
+    has_order_in_subject = subject_order_patterns.any? { |pattern| @subject.match?(pattern) }
+    
+    if has_receipt_subject || has_order_in_subject
+      has_order_number = extract_order_number.present? || extract_order_number_from_subject.present?
+      has_line_items = extract_line_items.any?
+      has_total = extract_total_amount.present?
+      
+      if has_order_number || has_line_items || has_total
+        return true
+      end
+      
+      if has_order_in_subject
+        return true
+      end
+    end
+    
     has_order_number = extract_order_number.present?
     has_line_items = extract_line_items.any?
     has_total = extract_total_amount.present?
     
-    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking e-receipt]
-    has_receipt_subject = subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
-    
-    if has_receipt_subject
-      return true if has_order_number || has_line_items || has_total
-    end
-    
-    if @subject.match?(/your (receipt|e-receipt) from/i) || @subject.match?(/receipt for/i)
-      return true if has_order_number || has_line_items || has_total
-    end
-    
-    return false unless has_order_number || (has_line_items && has_total)
+    return true if has_order_number || (has_line_items && has_total)
     
     content_indicators = [
       /order\s+(?:number|#|id)[:\s]+[A-Z0-9\-]{6,}/i,
@@ -106,6 +123,22 @@ class EmailOrderParser
 
     order_patterns.each do |pattern|
       if match = @text.match(pattern)
+        return match[1].strip
+      end
+    end
+
+    extract_order_number_from_subject
+  end
+
+  def extract_order_number_from_subject
+    order_patterns = [
+      /order\s*#\s*([A-Z0-9\-]{4,40})/i,
+      /order\s+(?:number|#|id)[:\s]*([A-Z0-9\-]{4,40})/i,
+      /#\s*([A-Z0-9\-]{4,40})/i
+    ]
+
+    order_patterns.each do |pattern|
+      if match = @subject.match(pattern)
         return match[1].strip
       end
     end
