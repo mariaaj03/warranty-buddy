@@ -266,7 +266,11 @@ class GmailService
         next unless attachment_data&.data
 
         # Decode attachment data
-        decoded_data = Base64.urlsafe_decode64(attachment_data.data)
+        begin
+          decoded_data = Base64.urlsafe_decode64(attachment_data.data)
+        rescue ArgumentError
+          decoded_data = Base64.decode64(attachment_data.data)
+        end
 
         # Process based on file type
         if attachment[:mime_type] == "application/pdf"

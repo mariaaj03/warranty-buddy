@@ -48,7 +48,8 @@ class GmailFetcher
     end
 
     if payload.parts
-      find_html_part(payload.parts)
+      result = find_html_part(payload.parts)
+      return result.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     else
       ""
     end
@@ -62,7 +63,8 @@ class GmailFetcher
     end
 
     if payload.parts
-      find_text_part(payload.parts)
+      result = find_text_part(payload.parts)
+      return result.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     else
       ""
     end
@@ -112,15 +114,20 @@ class GmailFetcher
   end
 
   def base64_decode(data)
-    Base64.urlsafe_decode64(data)
+    decoded = Base64.urlsafe_decode64(data)
+    decoded.force_encoding("UTF-8")
+    decoded.encode("UTF-8", invalid: :replace, undef: :replace)
   rescue ArgumentError
-    Base64.decode64(data)
+    decoded = Base64.decode64(data)
+    decoded.force_encoding("UTF-8")
+    decoded.encode("UTF-8", invalid: :replace, undef: :replace)
   end
 
   def find_html_part(parts)
     parts.each do |part|
       if part.mime_type == "text/html" && part.body && part.body.data
-        return base64_decode(part.body.data)
+        html = base64_decode(part.body.data)
+        return html.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
       elsif part.parts
         result = find_html_part(part.parts)
         return result if result.present?
@@ -132,7 +139,8 @@ class GmailFetcher
   def find_text_part(parts)
     parts.each do |part|
       if part.mime_type == "text/plain" && part.body && part.body.data
-        return base64_decode(part.body.data)
+        text = base64_decode(part.body.data)
+        return text.to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
       elsif part.parts
         result = find_text_part(part.parts)
         return result if result.present?

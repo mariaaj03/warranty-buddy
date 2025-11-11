@@ -9,10 +9,10 @@ end
 
 class EmailOrderParser
   def initialize(html_content, text_content = nil, subject = nil, from = nil)
-    @html = html_content || ""
-    @text = text_content || extract_text_from_html(@html)
-    @subject = subject || ""
-    @from = from || ""
+    @html = (html_content || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @text = (text_content || extract_text_from_html(@html)).to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @subject = (subject || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
+    @from = (from || "").to_s.force_encoding("UTF-8").encode("UTF-8", invalid: :replace, undef: :replace)
     @doc = Nokogiri::HTML(@html)
   end
 
@@ -42,10 +42,14 @@ class EmailOrderParser
     has_line_items = extract_line_items.any?
     has_total = extract_total_amount.present?
     
-    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking]
+    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking e-receipt]
     has_receipt_subject = subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
     
     if has_receipt_subject
+      return true if has_order_number || has_line_items || has_total
+    end
+    
+    if @subject.match?(/your (receipt|e-receipt) from/i) || @subject.match?(/receipt for/i)
       return true if has_order_number || has_line_items || has_total
     end
     
