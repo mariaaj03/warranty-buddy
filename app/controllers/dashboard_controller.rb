@@ -43,6 +43,7 @@ class DashboardController < ApplicationController
 
   def upload
     receipt_data = nil
+    extraction_error = nil
 
     if params[:receipt_file].present?
       uploaded_file = params[:receipt_file]
@@ -55,22 +56,41 @@ class DashboardController < ApplicationController
           receipt_data = receipt_processor.process_pdf(file_data)
         elsif %w[.jpg .jpeg .png .gif .bmp .tiff].include?(file_extension)
           receipt_data = receipt_processor.process_image(file_data, uploaded_file.original_filename)
+        else
+          extraction_error = "Unsupported file type. Please upload an image (JPG, PNG) or PDF."
         end
+      rescue => e
+        Rails.logger.error "Receipt processing error: #{e.message}"
+        Rails.logger.error e.backtrace.first(5).join("\n")
+        extraction_error = "Error processing receipt: #{e.message}"
       ensure
         receipt_processor.cleanup
       end
 
-      if receipt_data.nil?
-        flash[:alert] = "Could not extract information from receipt. Please enter details manually."
+      if receipt_data.nil? && extraction_error.nil?
+        extraction_error = "Could not extract information from receipt. Please enter details manually."
       end
     end
 
-    product_name = params[:product].presence || receipt_data&.dig(:line_items)&.first&.dig(:name)
+    product_name = params[:product].presence
+    if product_name.blank? && receipt_data.present?
+      product_name = receipt_data[:line_items]&.first&.dig(:name) || receipt_data[:product_name]
+    end
+    
     merchant = params[:merchant].presence || receipt_data&.dig(:merchant)
     
     if product_name.blank?
-      redirect_to dashboard_path, alert: "Product name is required"
+      error_msg = if params[:receipt_file].present?
+        extraction_error || "Could not extract product name from receipt. Please enter it manually."
+      else
+        "Product name is required"
+      end
+      redirect_to dashboard_path, alert: error_msg
       return
+    end
+
+    if extraction_error
+      flash[:alert] = extraction_error
     end
 
     purchase_date = if params[:purchase_date].present?
@@ -263,3 +283,4 @@ class DashboardController < ApplicationController
     @gmail_connected = current_user&.gmail_connected?
   end
 end
+

@@ -26,11 +26,18 @@ class ReceiptProcessor
 
     begin
       text = @vision_service.extract_text_from_image(image_data)
-      return nil if text.blank?
+      if text.blank?
+        Rails.logger.warn "No text extracted from image. Vision API may not be configured or image may not contain readable text."
+        return nil
+      end
 
-      parse_receipt_with_ai(text)
+      Rails.logger.info "Extracted #{text.length} characters from image"
+      result = parse_receipt_with_ai(text)
+      Rails.logger.info "Parsed receipt data: #{result.inspect}" if result
+      result
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
+      Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
   end
@@ -72,10 +79,12 @@ class ReceiptProcessor
     ai_result = @ai_service.extract_receipt_info(text)
     
     if ai_result && ai_result["is_receipt"] == true
+      product_name = ai_result["product_name"]
       {
+        product_name: product_name,
         merchant: ai_result["merchant"],
         purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
-        line_items: [{ name: ai_result["product_name"], quantity: 1, price: nil }],
+        line_items: [{ name: product_name, quantity: 1, price: nil }],
         total_amount: nil,
         order_number: nil,
         warranty_length_months: ai_result["warranty_length_months"],
@@ -84,7 +93,11 @@ class ReceiptProcessor
         return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
       }
     else
-      parse_receipt_text(text)
+      fallback_data = parse_receipt_text(text)
+      if fallback_data && fallback_data[:line_items]&.any?
+        fallback_data[:product_name] = fallback_data[:line_items].first[:name]
+      end
+      fallback_data
     end
   end
 

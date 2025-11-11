@@ -15,7 +15,10 @@ class GoogleVisionService
   end
 
   def extract_text_from_image(image_data)
-    return nil unless @service.authorization || @api_key
+    unless @service.authorization || @api_key
+      Rails.logger.error "Vision API key not configured. Set GOOGLE_VISION_API_KEY environment variable or add vision_api_key to credentials."
+      return nil
+    end
 
     begin
       if @api_key
