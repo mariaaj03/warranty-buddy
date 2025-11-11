@@ -73,29 +73,42 @@ class GmailService
   end
 
   def parse_email_content(html_content, text_content, subject, from, date_header, message_id)
-    # First try merchant-specific parsing
+    promotional_keywords = [
+      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
+      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i,
+      /newsletter/i, /marketing/i, /advertisement/i
+    ]
+    
+    return nil if promotional_keywords.any? { |pattern| subject.match?(pattern) }
+    return nil if subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+    
     merchant = extract_merchant_from_headers(from, html_content, text_content)
+    return nil if merchant == "Digital" || merchant.blank?
+    
     parser_class = MerchantParsers.get_parser(merchant)
 
     parsed_data = parser_class.parse(html_content, text_content)
 
-    # If merchant-specific parsing failed, try generic parsing
     if parsed_data.nil?
       generic_parser = EmailOrderParser.new(html_content, text_content, subject, from)
       parsed_data = generic_parser.parse
     end
 
     return nil unless parsed_data
-
-    # Convert to our expected format
+    
     line_items = parsed_data[:line_items] || []
+    return nil if line_items.empty? && parsed_data[:order_number].blank?
+    
     primary_item = line_items.first
+    product_name = primary_item&.dig(:name)
+    
+    return nil if product_name.blank? && parsed_data[:order_number].blank?
 
     {
-      product_name: primary_item&.dig(:name) || extract_product_name_from_subject(subject),
-      merchant: parsed_data[:merchant] || extract_merchant_from_headers(from, html_content, text_content),
+      product_name: product_name || "Order #{parsed_data[:order_number]}",
+      merchant: parsed_data[:merchant] || merchant || "Unknown",
       purchase_date: parsed_data[:purchase_date] || parse_email_date(date_header) || Date.today,
-      warranty_months: determine_warranty_length(parsed_data[:merchant], primary_item&.dig(:name)),
+      warranty_months: determine_warranty_length(parsed_data[:merchant], product_name),
       warranty_type: "manufacturer",
       return_policy_days: determine_return_policy(parsed_data[:merchant]),
       return_deadline: nil,
@@ -147,23 +160,29 @@ class GmailService
   def extract_product_name_from_subject(subject)
     return "Unknown Product" if subject.blank?
 
-    # Try to extract product name from subject
+    promotional_keywords = [
+      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
+      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i
+    ]
+    
+    return "Unknown Product" if promotional_keywords.any? { |pattern| subject.match?(pattern) }
+    return "Unknown Product" if subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+
     patterns = [
       /receipt for\s+(.+)/i,
       /order\s+for\s+(.+)/i,
-      /order\s+(.+)/i,
       /your order of\s+(.+)/i,
-      /purchase\s+of\s+(.+)/i,
-      /purchase\s+(.+)/i
+      /purchase\s+of\s+(.+)/i
     ]
 
     patterns.each do |pattern|
       if match = subject.match(pattern)
-        return match[1].strip[0..120]
+        product = match[1].strip[0..120]
+        return product unless promotional_keywords.any? { |pat| product.match?(pat) }
       end
     end
 
-    subject.strip[0..120]
+    "Unknown Product"
   end
 
   def parse_email_date(date_string)

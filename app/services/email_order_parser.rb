@@ -29,22 +29,33 @@ class EmailOrderParser
   end
 
   def is_order_email?
-    # Check subject for order keywords
-    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking purchase bought]
+    promotional_keywords = [
+      /select items/i, /arrive in time/i, /last minute/i, /gifts delivered/i,
+      /valentine/i, /christmas/i, /holiday/i, /sale/i, /discount/i, /promo/i,
+      /newsletter/i, /marketing/i, /advertisement/i, /unsubscribe/i
+    ]
+    
+    return false if promotional_keywords.any? { |pattern| @subject.match?(pattern) }
+    
+    return false if @subject.match?(/^(select|shop|buy|save|deal|offer|special)/i)
+    
+    has_order_number = extract_order_number.present?
+    has_line_items = extract_line_items.any?
+    has_total = extract_total_amount.present?
+    
+    return false unless has_order_number || (has_line_items && has_total)
+    
+    subject_keywords = %w[order receipt invoice confirmation shipped delivered tracking]
     return true if subject_keywords.any? { |keyword| @subject.downcase.include?(keyword) }
-
-    # Check content for order indicators
+    
     content_indicators = [
-      /order\s+(?:number|#|id)/i,
-      /receipt/i,
-      /invoice/i,
-      /confirmation/i,
-      /shipped/i,
-      /delivered/i,
-      /tracking/i,
-      /purchase/i,
-      /total.*\$?\d+\.?\d*/i,
-      /subtotal.*\$?\d+\.?\d*/i
+      /order\s+(?:number|#|id)[:\s]+[A-Z0-9\-]{6,}/i,
+      /receipt\s+(?:number|#)/i,
+      /invoice\s+(?:number|#)/i,
+      /confirmation\s+(?:number|#)/i,
+      /tracking\s+(?:number|#)/i,
+      /total[:\s]*\$?\d+\.?\d*/i,
+      /subtotal[:\s]*\$?\d+\.?\d*/i
     ]
 
     content_indicators.any? { |pattern| @text.match?(pattern) }
