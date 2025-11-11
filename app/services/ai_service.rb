@@ -3,6 +3,15 @@ require "json"
 require "uri"
 require "cgi"
 
+class GeminiRateLimitError < StandardError
+  attr_reader :retry_delay
+
+  def initialize(message, retry_delay = nil)
+    super(message)
+    @retry_delay = retry_delay
+  end
+end
+
 class AiService
   def initialize(client = nil)
     if client
@@ -171,7 +180,7 @@ class AiService
 
   private
 
-  def call_gemini_api(prompt)
+  def call_gemini_api(prompt, retry_count = 0)
     api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
     return nil unless api_key.present?
 
@@ -195,12 +204,46 @@ class AiService
     if response.code == "200"
       result = JSON.parse(response.body)
       result.dig("candidates", 0, "content", "parts", 0, "text") || ""
+    elsif response.code == "429"
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "Rate limit exceeded"
+      retry_delay = extract_retry_delay(error_data)
+      
+      if retry_count < 2 && retry_delay && retry_delay > 0
+        Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
+        sleep([retry_delay, 60].min)
+        return call_gemini_api(prompt, retry_count + 1)
+      end
+      
+      raise GeminiRateLimitError.new(error_message, retry_delay)
     else
-      Rails.logger.error "Gemini API error: #{response.code} - #{response.body}"
-      raise "Gemini API error: #{response.code}"
+      error_data = JSON.parse(response.body) rescue {}
+      error_message = error_data.dig("error", "message") || "API error"
+      Rails.logger.error "Gemini API error: #{response.code} - #{error_message}"
+      raise "Gemini API error: #{response.code} - #{error_message}"
     end
+  rescue JSON::ParserError => e
+    Rails.logger.error "Gemini API response parse error: #{e.message}"
+    raise "Gemini API error: Invalid response format"
+  rescue GeminiRateLimitError
+    raise
   rescue => e
     Rails.logger.error "Gemini API call failed: #{e.message}"
     raise e
+  end
+
+  def extract_retry_delay(error_data)
+    retry_info = error_data.dig("error", "details")&.find { |d| d["@type"] == "type.googleapis.com/google.rpc.RetryInfo" }
+    if retry_info && retry_info["retryDelay"]
+      delay_str = retry_info["retryDelay"].to_s
+      if delay_str.match?(/^\d+\.?\d*s?$/)
+        seconds = delay_str.gsub(/s$/, "").to_f
+        seconds > 0 ? seconds : nil
+      else
+        nil
+      end
+    else
+      nil
+    end
   end
 end

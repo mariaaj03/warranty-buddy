@@ -36,11 +36,25 @@ class ChatbotController < ApplicationController
           error: "Unable to generate an answer. Please check your Gemini API key configuration."
         }, status: :internal_server_error
       end
+    rescue GeminiRateLimitError => e
+      retry_message = e.retry_delay ? " Please try again in about #{e.retry_delay.to_i} seconds." : ""
+      user_message = "The AI service is currently rate-limited. This usually means you've made too many requests too quickly.#{retry_message} If this persists, you may need to check your Gemini API quota at https://ai.dev/usage?tab=rate-limit"
+      Rails.logger.error "Chatbot rate limit error: #{e.message}"
+      render json: { 
+        error: user_message
+      }, status: :too_many_requests
     rescue => e
       Rails.logger.error "Chatbot error: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
+      
+      error_message = if e.message.include?("429") || e.message.include?("rate limit") || e.message.include?("quota")
+        "The AI service is currently rate-limited. Please wait a moment and try again. If this persists, check your Gemini API quota at https://ai.dev/usage?tab=rate-limit"
+      else
+        "An error occurred: #{e.message}. Please check your API configuration."
+      end
+      
       render json: { 
-        error: "An error occurred: #{e.message}. Please check your API configuration."
+        error: error_message
       }, status: :internal_server_error
     end
   end
