@@ -209,9 +209,10 @@ class AiService
       error_message = error_data.dig("error", "message") || "Rate limit exceeded"
       retry_delay = extract_retry_delay(error_data)
       
-      if retry_count < 2 && retry_delay && retry_delay > 0
+      max_retry_delay = 10
+      if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
         Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
-        sleep([retry_delay, 60].min)
+        sleep(retry_delay)
         return call_gemini_api(prompt, retry_count + 1)
       end
       
