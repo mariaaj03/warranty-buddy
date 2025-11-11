@@ -392,15 +392,20 @@
       padding: 1.5rem;
       border-radius: 0.5rem;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-      text-align: center;
+    }
+
+    .export-section h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 1rem;
     }
 
     .export-buttons {
       display: flex;
-      justify-content: center;
+      align-items: center;
       gap: 1rem;
       flex-wrap: wrap;
-      margin-top: 1rem;
     }
 
     .export-btn {
@@ -414,6 +419,7 @@
       font-size: 0.875rem;
       transition: all 0.2s ease;
       border: 1px solid transparent;
+      white-space: nowrap;
     }
 
     .export-btn--csv {
@@ -436,6 +442,44 @@
       background: #1a7a35;
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(34, 142, 62, 0.3);
+    }
+
+    .ical-reminders-section {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .ical-reminders-label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.875rem;
+      white-space: nowrap;
+    }
+
+    .ical-reminders-options {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .ical-reminders-options label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: #4b5563;
+      cursor: pointer;
+    }
+
+    .ical-reminders-options input[type="checkbox"] {
+      cursor: pointer;
     }
 
     /* Responsive */
@@ -485,12 +529,6 @@
       </div>
     </div>
 
-    <% if flash[:notice].present? %>
-      <div class="flash notice"><%= flash[:notice] %></div>
-    <% end %>
-    <% if flash[:alert].present? %>
-      <div class="flash alert"><%= flash[:alert] %></div>
-    <% end %>
 
     <!-- Filters -->
     <div class="filters-section">
@@ -635,31 +673,42 @@
 
     <!-- Export Section -->
     <div class="export-section">
-      <h3 style="font-size: 1rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem;">Export Warranties</h3>
+      <h3>Export Warranties</h3>
       <div class="export-buttons">
         <%= link_to export_products_path(format: :csv), class: "export-btn export-btn--csv" do %>
           ⬇️ Export CSV
         <% end %>
 
-        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false }, html: { class: "ical-combo", style: "display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0.5rem 0.35rem 0.35rem; border: 1px solid #cce7d4; background: #eef7f0; border-radius: 999px;" } do |f| %>
-          <button type="submit" class="export-btn export-btn--ical" style="margin: 0;">
+        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false } do |f| %>
+          <button type="submit" class="export-btn export-btn--ical">
             📅 Export iCal
           </button>
-          <span style="width: 1px; height: 1.6rem; background: #cce7d4;"></span>
-          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; padding-right: 0.25rem;">
-            <span style="font-weight: 600; color: #1f3b2b; margin-right: 0.25rem; font-size: 0.95rem;">Reminders:</span>
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
-              <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:reminders]).include?("0") %> /> same day
+        <% end %>
+      </div>
+      
+      <div class="ical-reminders-section" style="margin-top: 1rem;">
+        <span class="ical-reminders-label">iCal Reminders:</span>
+        <%= form_with url: calendar_products_path, method: :get, local: true, data: { turbo: false }, html: { style: "display: contents;" } do |f| %>
+          <div class="ical-reminders-options">
+            <label>
+              <input type="checkbox" name="reminders[]" value="0" <%= "checked" if Array(params[:reminders]).include?("0") %> />
+              same day
             </label>
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
-              <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:reminders]).include?("1") %> /> 1 day
+            <label>
+              <input type="checkbox" name="reminders[]" value="1" <%= "checked" if Array(params[:reminders]).include?("1") %> />
+              1 day
             </label>
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
-              <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:reminders]).include?("7") %> /> 7 days
+            <label>
+              <input type="checkbox" name="reminders[]" value="7" <%= "checked" if Array(params[:reminders]).include?("7") %> />
+              7 days
             </label>
-            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; color: #111827;">
-              <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:reminders]).include?("30") %> /> 30 days
+            <label>
+              <input type="checkbox" name="reminders[]" value="30" <%= "checked" if Array(params[:reminders]).include?("30") %> />
+              30 days
             </label>
+            <button type="submit" class="export-btn export-btn--ical" style="margin-left: auto;">
+              📅 Export iCal with Reminders
+            </button>
           </div>
         <% end %>
       </div>
