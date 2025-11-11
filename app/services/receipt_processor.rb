@@ -158,7 +158,7 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    lines = text.split(/\n|\r\n/).map(&:strip).first(30)
+    lines = text.split(/\n|\r\n/).map(&:strip).first(40)
     
     excluded_patterns = [
       /return date/i, /serial number/i, /part number/i, /imei/i,
@@ -167,6 +167,9 @@ class ReceiptProcessor
     ]
     
     date_patterns = [
+      /(?:date\/time|date|time)[:\s]*(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/,
+      /(?:date\/time|date|time)[:\s]*(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/i,
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?/i,
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
       /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
@@ -183,12 +186,17 @@ class ReceiptProcessor
       date_patterns.each do |pattern|
         if match = line.match(pattern)
           date_str = match[1] || match[0]
+          date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first.strip if date_str.match?(/\d{1,2}:\d{2}/)
+          date_str = date_str.split(/\s+\d{4}\/\d{2}\/\d{2}/).first.strip if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
+          
           begin
             parsed_date = Date.parse(date_str)
             if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+              Rails.logger.info "Extracted date: #{parsed_date} from line: #{line}"
               return parsed_date
             end
-          rescue ArgumentError
+          rescue ArgumentError => e
+            Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
           end
         end
       end
@@ -197,12 +205,17 @@ class ReceiptProcessor
     date_patterns.each do |pattern|
       if match = text.match(pattern)
         date_str = match[1] || match[0]
+        date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first.strip if date_str.match?(/\d{1,2}:\d{2}/)
+        date_str = date_str.split(/\s+\d{4}\/\d{2}\/\d{2}/).first.strip if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
+        
         begin
           parsed_date = Date.parse(date_str)
           if parsed_date <= Date.today && parsed_date >= Date.today - 3650
+            Rails.logger.info "Extracted date: #{parsed_date} from text"
             return parsed_date
           end
-        rescue ArgumentError
+        rescue ArgumentError => e
+          Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
         end
       end
     end

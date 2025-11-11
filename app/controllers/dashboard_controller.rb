@@ -93,14 +93,16 @@ class DashboardController < ApplicationController
       flash[:alert] = extraction_error
     end
 
-    purchase_date = if params[:purchase_date].present?
+    purchase_date = if receipt_data&.dig(:purchase_date).present?
+      receipt_data[:purchase_date]
+    elsif params[:purchase_date].present?
       begin
         Date.parse(params[:purchase_date])
       rescue ArgumentError, TypeError
-        receipt_data&.dig(:purchase_date) || Date.today
+        Date.today
       end
     else
-      receipt_data&.dig(:purchase_date) || Date.today
+      Date.today
     end
 
     warranty_months = if params[:warranty_length].present?
