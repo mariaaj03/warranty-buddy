@@ -1,23 +1,19 @@
+require "net/http"
+require "json"
+require "uri"
+require "cgi"
+
 class AiService
   def initialize(client = nil)
     if client
       @client = client
+      @api_key = nil
     else
-      begin
-        require "gemini-ai"
-        @client = Gemini.new(
-          credentials: {
-            service: "generative-language-api",
-            api_key: Rails.application.credentials.dig(:google, :gemini_api_key)
-          },
-          options: { model: "gemini-2.0-flash", server_sent_events: false }
-        )
-      rescue LoadError => e
-        Rails.logger.error "Gemini AI gem not available: #{e.message}"
-        @client = nil
-      rescue => e
-        Rails.logger.error "Gemini AI client initialization failed: #{e.message}"
-        @client = nil
+      @api_key = ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
+      @client = @api_key.present? ? :rest_api : nil
+      
+      unless @api_key.present?
+        Rails.logger.error "Gemini API key not found in credentials or environment"
       end
     end
   end
@@ -62,11 +58,7 @@ class AiService
 
     Rails.logger.debug "📝 Prompt length: #{prompt.length}"
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
+    response_text = call_gemini_api(prompt)
     Rails.logger.debug "🤖 AI Response: #{response_text}"
 
     # Clean up markdown code blocks if present
@@ -107,13 +99,7 @@ class AiService
       Be conservative and only include information you're confident about.
     PROMPT
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-
-    # Clean up markdown code blocks if present
+    response_text = call_gemini_api(prompt)
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     JSON.parse(response_text)
@@ -138,13 +124,7 @@ class AiService
       Warranty Terms: #{warranty_terms}
     PROMPT
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
-
-    # Clean up markdown code blocks if present
+    response_text = call_gemini_api(prompt)
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     JSON.parse(response_text)
@@ -181,15 +161,46 @@ class AiService
       Format your response as plain text (no markdown). Be conversational but informative.
     PROMPT
 
-    response = @client.generate_content({
-      contents: { role: "user", parts: { text: prompt } }
-    })
-
-    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
+    response_text = call_gemini_api(prompt)
     response_text&.strip || "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
   rescue => e
     Rails.logger.error "AI warranty question answering failed: #{e.message}"
     Rails.logger.error e.backtrace.first(5).join("\n")
+    raise e
+  end
+
+  private
+
+  def call_gemini_api(prompt)
+    api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
+    return nil unless api_key.present?
+
+    uri = URI("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=#{CGI.escape(api_key)}")
+    
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    
+    request = Net::HTTP::Post.new(uri.request_uri)
+    request["Content-Type"] = "application/json"
+    request.body = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }]
+    }.to_json
+
+    response = http.request(request)
+    
+    if response.code == "200"
+      result = JSON.parse(response.body)
+      result.dig("candidates", 0, "content", "parts", 0, "text") || ""
+    else
+      Rails.logger.error "Gemini API error: #{response.code} - #{response.body}"
+      raise "Gemini API error: #{response.code}"
+    end
+  rescue => e
+    Rails.logger.error "Gemini API call failed: #{e.message}"
     raise e
   end
 end
