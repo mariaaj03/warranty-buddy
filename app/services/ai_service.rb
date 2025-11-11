@@ -152,4 +152,43 @@ class AiService
     Rails.logger.error "AI warranty eligibility check failed: #{e.message}"
     nil
   end
+
+  def answer_warranty_question(question, search_results = nil)
+    return nil unless @client
+
+    search_context = ""
+    if search_results && search_results.any?
+      search_context = "\n\nRelevant information from web search:\n"
+      search_results.first(5).each_with_index do |result, idx|
+        search_context += "#{idx + 1}. #{result[:title]}\n   #{result[:snippet]}\n   Source: #{result[:url]}\n\n"
+      end
+    end
+
+    prompt = <<~PROMPT
+      You are a helpful warranty assistant. Answer the user's question about warranty coverage, product issues, or warranty policies.
+
+      Be specific, helpful, and cite sources when available. If you're not certain, say so.
+
+      User Question: #{question}
+      #{search_context}
+
+      Provide a clear, concise answer. If the question is about a specific product issue (like water damage, breakage, etc.), explain:
+      1. Whether it's typically covered under warranty
+      2. Why or why not
+      3. What the user should do next
+      4. Any relevant warranty terms or exclusions
+
+      Format your response as plain text (no markdown). Be conversational but informative.
+    PROMPT
+
+    response = @client.generate_content({
+      contents: { role: "user", parts: { text: prompt } }
+    })
+
+    response_text = response.dig("candidates", 0, "content", "parts", 0, "text")
+    response_text.strip
+  rescue => e
+    Rails.logger.error "AI warranty question answering failed: #{e.message}"
+    "I'm sorry, I encountered an error while processing your question. Please try again."
+  end
 end

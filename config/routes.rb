@@ -38,4 +38,6 @@ Rails.application.routes.draw do
   delete "/warranties/:id", to: "dashboard#delete_warranty", as: :delete_warranty
   patch "/warranties/:id", to: "dashboard#update_warranty", as: :update_warranty
   patch '/update_warranty/:id', to: 'dashboard#update_warranty'
+  
+  post "/chatbot/ask", to: "chatbot#ask", as: :chatbot_ask
 end

@@ -19,6 +19,38 @@ class GoogleSearchService
     extract_warranty_info(search_results, product_name, merchant)
   end
 
+  def search_warranty_question(question)
+    return [] unless @api_key && @search_engine_id
+
+    uri = URI("https://www.googleapis.com/customsearch/v1")
+    params = {
+      key: @api_key,
+      cx: @search_engine_id,
+      q: "#{question} warranty coverage",
+      num: 5
+    }
+    uri.query = URI.encode_www_form(params)
+
+    response = Net::HTTP.get_response(uri)
+
+    if response.code == "200"
+      results = JSON.parse(response.body)["items"] || []
+      results.map do |item|
+        {
+          title: item["title"],
+          snippet: item["snippet"],
+          url: item["link"]
+        }
+      end
+    else
+      Rails.logger.error "Google Search API error: #{response.code} - #{response.body}"
+      []
+    end
+  rescue => e
+    Rails.logger.error "Google Search API request failed: #{e.message}"
+    []
+  end
+
   private
 
   def build_warranty_query(product_name, merchant)
