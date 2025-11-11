@@ -160,19 +160,25 @@ class ReceiptProcessor
   def extract_date_from_receipt(text)
     lines = text.split(/\n|\r\n/).map(&:strip).first(30)
     
+    excluded_patterns = [
+      /return date/i, /serial number/i, /part number/i, /imei/i,
+      /purchased\s+nov\s+\d{1,2},?\s+\d{4}/i,
+      /purchased\s+\d{1,2}\s+months/i
+    ]
+    
     date_patterns = [
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
-      /(?:purchased|date|order\s+date)[:\s]*(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/i,
-      /(?:purchased|date|order\s+date)[:\s]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}/i,
       /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      /(?:date|purchased?|order\s+date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2})\b/
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/
     ]
 
     lines.each do |line|
-      next if line.match?(/return date|serial number|part number|imei/i)
+      excluded_patterns.each do |pattern|
+        next if line.match?(pattern)
+      end
+      
+      next if line.match?(/purchased.*\d+\s+months/i)
       
       date_patterns.each do |pattern|
         if match = line.match(pattern)
@@ -207,78 +213,98 @@ class ReceiptProcessor
   def extract_items_from_receipt(text)
     items = []
     lines = text.split(/\n|\r\n/).map(&:strip).reject(&:blank?)
+    
+    excluded_phrases = [
+      /payment method/i, /purchased/i, /subtotal/i, /total/i, /tax/i, /shipping/i,
+      /discount/i, /order/i, /receipt/i, /merchant/i, /store/i, /thank you/i,
+      /part number/i, /serial number/i, /imei/i, /return date/i, /for support/i,
+      /www\./i, /http/i, /email/i, /phone/i, /address/i, /warranty/i, /months/i
+    ]
 
     lines.each_with_index do |line, index|
-      next if line.length < 3
+      next if line.length < 5
+      
+      excluded_phrases.each do |pattern|
+        next if line.match?(pattern)
+      end
       
       email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
       next if line.match?(email_pattern)
+      next if line.match?(/^\d+$/)
+      next if line.match?(/^\$/)
+      next if line.match?(/^\d{4}-\d{2}-\d{2}/)
+      next if line.match?(/\d{2}:\d{2}/)
       
-      next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial number|imei|return date|for support)/i)
-      
-      price_match = line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
-      if price_match
-        price = parse_price(price_match[1])
-        next unless price && price > 0
+      if line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/)
+        next_line = lines[index + 1] if index + 1 < lines.length
+        next_next = lines[index + 2] if index + 2 < lines.length
         
-        product_name = nil
-        
-        (0..5).each do |offset|
-          prev_index = index - offset - 1
-          next if prev_index < 0
+        if next_line && next_line.match?(/^Part Number:/i)
+          price_line = nil
           
-          prev_line = lines[prev_index]
-          next if prev_line.blank?
-          
-          next if prev_line.match?(/^(part number|serial number|imei|return date|for support|www\.|http)/i)
-          next if prev_line.match?(email_pattern)
-          next if prev_line.match?(/\d{2}:\d{2}/)
-          next if prev_line.match?(/^\d{4}-\d{2}-\d{2}/)
-          next if prev_line.match?(/^\$/)
-          
-          if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{5,80}$/) && !prev_line.match?(/^\d+$/)
-            product_name = prev_line
-            break
+          (index + 2..[index + 6, lines.length - 1].min).each do |i|
+            candidate = lines[i]
+            if candidate && candidate.match?(/^\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+              price_line = candidate
+              break
+            end
           end
-        end
-        
-        if product_name && product_name.length >= 5
-          items << {
-            name: product_name,
-            quantity: 1,
-            price: price
-          }
+          
+          if price_line
+            price_match = price_line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+            if price_match
+              price = parse_price(price_match[1])
+              if price && price > 0 && price < 100000
+                items << {
+                  name: line,
+                  quantity: 1,
+                  price: price
+                }
+              end
+            end
+          end
         end
       end
     end
 
     if items.empty?
       lines.each_with_index do |line, index|
-        next if line.length < 5
+        next if line.length < 3
+        next if line.match?(/^(payment method|purchased|subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial|imei|return|for support|www\.|http)/i)
         
         email_pattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
         next if line.match?(email_pattern)
-        next if line.match?(/^(subtotal|total|tax|shipping|discount|order|receipt|date|merchant|store|thank you|part number|serial|imei|return|for support|www\.|http)/i)
-        next if line.match?(/\d{2}:\d{2}/)
-        next if line.match?(/^\d{4}-\d{2}-\d{2}/)
-        next if line.match?(/^\$/)
         
-        if line.match?(/^[A-Z][a-zA-Z0-9\s\-]{5,80}$/) && !line.match?(/^\d+$/)
-          next_line = lines[index + 1] if index + 1 < lines.length
-          if next_line && next_line.match?(/part number|serial number/i)
-            price_line = lines[index + 3] || lines[index + 4]
-            if price_line
-              price_match = price_line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
-              if price_match
-                price = parse_price(price_match[1])
-                if price && price > 0
-                  items << {
-                    name: line,
-                    quantity: 1,
-                    price: price
-                  }
-                end
-              end
+        price_match = line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
+        if price_match
+          price = parse_price(price_match[1])
+          next unless price && price > 0 && price < 100000
+          
+          (1..8).each do |offset|
+            prev_index = index - offset
+            next if prev_index < 0
+            
+            prev_line = lines[prev_index]
+            next if prev_line.blank?
+            
+            excluded_phrases.each do |pattern|
+              next if prev_line.match?(pattern)
+            end
+            
+            next if prev_line.match?(email_pattern)
+            next if prev_line.match?(/^\d+$/)
+            next if prev_line.match?(/^\$/)
+            next if prev_line.match?(/^\d{4}-\d{2}-\d{2}/)
+            next if prev_line.match?(/\d{2}:\d{2}/)
+            next if prev_line.match?(/^(part number|serial|imei|return|for support)/i)
+            
+            if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/) && !prev_line.match?(/^\d+$/)
+              items << {
+                name: prev_line,
+                quantity: 1,
+                price: price
+              }
+              break
             end
           end
         end
