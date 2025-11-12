@@ -325,56 +325,23 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    lines = text.split(/\n|\r\n/).map(&:strip).first(40)
-    
-    excluded_patterns = [
-      /return date/i, /serial number/i, /part number/i, /imei/i,
-      /purchased\s+nov\s+\d{1,2},?\s+\d{4}/i,
-      /purchased\s+\d{1,2}\s+months/i
-    ]
-    
+    # Look for various date patterns
     date_patterns = [
-      /(?:date\/time|date|time)[:\s]*(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/,
-      /(?:date\/time|date|time)[:\s]*((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i,
-      /\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\s+\d{1,2}:\d{2}\s*(?:AM|PM)?/i,
-      /\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\b/i,
-      /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4})\b/i,
+      # Format: 01/12/2025, 1/12/2025, 10-12-2025
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
+      # Format: 2025-01-12
       /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2})\b/
+      # Format: December 12, 2025 or Dec 12, 2025
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
+      # Format: 12 December 2025
+      /\b\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i,
+      # Look for "Date of purchase:", "Purchase date:", "Purchased:", etc.
+      /(?:date of purchase|purchase date|purchased|bought on)[:\s]+([^\n\r]{8,30})/i,
+      # Look for "Valid until:", "Expires:", "Coverage End Date:", etc.
+      /(?:valid until|expires|coverage end date|warranty until|warranty valid until)[:\s]+([^\n\r]{8,30})/i
     ]
-
-    lines.each do |line|
-      excluded_patterns.each do |pattern|
-        next if line.match?(pattern)
-      end
-      
-      next if line.match?(/purchased.*\d+\s+months/i)
-      
-      date_patterns.each do |pattern|
-        if match = line.match(pattern)
-          date_str = match[1] || match[0]
-          
-          if date_str.match?(/\d{1,2}:\d{2}/)
-            date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first
-            date_str = date_str.split(/\s+(?:AM|PM)/i).first if date_str.match?(/\s+(?:AM|PM)/i)
-          end
-          
-          if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
-            date_match = date_str.match(/(\d{4}\/\d{1,2}\/\d{1,2})/)
-            date_str = date_match[1] if date_match
-          end
-          
-          date_str = date_str.strip
-          
-          parsed_date = parse_date_string(date_str)
-          if parsed_date && parsed_date <= Date.today && parsed_date >= Date.today - 3650
-            Rails.logger.info "Extracted date: #{parsed_date} from line: #{line} (parsed from: #{date_str})"
-            return parsed_date
-          end
-        end
-      end
-    end
+    
 
     date_patterns.each do |pattern|
       if match = text.match(pattern)
