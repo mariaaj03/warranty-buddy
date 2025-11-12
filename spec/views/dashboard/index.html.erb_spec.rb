@@ -1,7 +1,21 @@
 require 'rails_helper'
 
 RSpec.describe "dashboard/index", type: :view do
+  include Devise::Test::ControllerHelpers
+
+  let(:user) { 
+    create(:user, 
+      uid: 'test_user',
+      email: 'test@example.com',
+      password: 'password123',
+      password_confirmation: 'password123'
+    ) 
+  }
+
   before do
+    # Sign in the user for Devise
+    sign_in user
+    
     assign(:title, "Warranty Buddy - Iteration 1")
     assign(:subtitle, "Your Digital Memory for Every Purchase")
     assign(:warranties, [])
@@ -14,29 +28,31 @@ RSpec.describe "dashboard/index", type: :view do
     assign(:merchants, [])
   end
 
-  it "displays the title and subtitle" do
+  it "displays the dashboard header with logo" do
     render
-    expect(rendered).to have_selector('h1', text: "Warranty Buddy - Iteration 1")
-    expect(rendered).to have_selector('.muted', text: "Your Digital Memory for Every Purchase")
+    expect(rendered).to have_selector('.logo', text: "Warranty Buddy")
+    expect(rendered).to have_selector('.logo-icon', text: "🧾")
   end
 
-  it "shows not connected status when Gmail is not connected" do
+  it "shows user information in header" do
     render
-    expect(rendered).to have_selector('.badge.not', text: "Not Connected")
-    expect(rendered).to have_button("Connect Gmail", class: "btn-primary")
+    expect(rendered).to have_selector('.user-name', text: user.email)
+    expect(rendered).to have_button("Sign Out")
   end
 
-  it "shows connected status when Gmail is connected" do
-    assign(:gmail_connected, true)
+  it "displays the filters section" do
     render
-    expect(rendered).to have_selector('.badge.ok', text: "Connected")
-    expect(rendered).to have_button("Disconnect Gmail", class: "btn-danger")
+    expect(rendered).to have_selector('.filters-section')
+    expect(rendered).to have_field('search')
+    expect(rendered).to have_select('status')
+    expect(rendered).to have_select('merchant')
+    expect(rendered).to have_select('sort')
   end
 
   it "displays the add product warranty section" do
     render
-    within('details') do
-      expect(rendered).to have_selector('summary', text: "Add a product warranty")
+    within('.add-product-section') do
+      expect(rendered).to have_selector('summary', text: "Add a Product Warranty")
       expect(rendered).to have_field('product', type: 'text')
       expect(rendered).to have_field('merchant', type: 'text')
       expect(rendered).to have_field('purchase_date', type: 'date')
@@ -46,8 +62,9 @@ RSpec.describe "dashboard/index", type: :view do
 
   it "shows empty warranties table when no products" do
     render
-    within('table') do
-      expect(rendered).to have_selector('td', text: "No warranties yet.")
+    within('.warranties-section') do
+      expect(rendered).to have_selector('.empty-state')
+      expect(rendered).to have_text("No warranties yet.")
     end
   end
 
@@ -58,7 +75,7 @@ RSpec.describe "dashboard/index", type: :view do
         merchant: "Amazon",
         purchase_date: Date.today,
         warranty_months: 12,
-        gmail_uid: 'test_user'
+        user: user
       )
     end
 
@@ -68,15 +85,15 @@ RSpec.describe "dashboard/index", type: :view do
 
     it "displays products in the table" do
       render
-      within('table') do
-        expect(rendered).to have_selector('td', text: "Test Product")
-        expect(rendered).to have_selector('td', text: "Amazon")
+      within('.warranties-table') do
+        expect(rendered).to have_selector('.product-name', text: "Test Product")
+        expect(rendered).to have_text("Amazon")
       end
     end
 
     it "shows active status for current warranty" do
       render
-      within('table') do
+      within('.warranties-table') do
         expect(rendered).to have_selector('.status-badge.status-active', text: "Active")
       end
     end
@@ -86,13 +103,22 @@ RSpec.describe "dashboard/index", type: :view do
         product_name: "Old Product",
         purchase_date: 2.years.ago,
         warranty_months: 12,
-        gmail_uid: 'test_user'
+        user: user
       )
       assign(:warranties, [expired_product])
       render
-      within('table') do
+      within('.warranties-table') do
         expect(rendered).to have_selector('.status-badge.status-expired', text: "Expired")
       end
+    end
+  end
+
+  it "displays export section" do
+    render
+    within('.export-section') do
+      expect(rendered).to have_text("Export Warranties")
+      expect(rendered).to have_link("Export CSV")
+      expect(rendered).to have_link("Export iCal")
     end
   end
 end

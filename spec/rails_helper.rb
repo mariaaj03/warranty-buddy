@@ -21,4 +21,7 @@ RSpec.configure do |config|
 
   # Include session helpers for request specs
   config.include RSpec::Rails::RequestExampleGroup, type: :request
+  
+  require "devise"
+  config.include Devise::Test::IntegrationHelpers, type: :request
 end
