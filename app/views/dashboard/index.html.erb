@@ -673,10 +673,10 @@
                 <td><%= w.merchant.present? ? w.merchant : "—" %></td>
                 <td>
                   <div class="action-buttons">
-                    <button class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
+                    <button type="button" class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
                       ✏️
                     </button>
-                    <button class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete">
+                    <button type="button" class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete">
                       🗑️
                     </button>
                   </div>
@@ -746,15 +746,19 @@
   (function() {
     // Handle action button clicks
     document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('delete-btn')) {
+      if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         
-        const warrantyId = e.target.getAttribute('data-warranty-id');
-        const row = e.target.closest('tr');
+        const deleteBtn = e.target.classList.contains('delete-btn') ? e.target : e.target.closest('.delete-btn');
+        if (deleteBtn.disabled) return;
+        
+        const warrantyId = deleteBtn.getAttribute('data-warranty-id');
+        const row = deleteBtn.closest('tr');
         
         if (warrantyId && row) {
-          deleteWarranty(warrantyId, row);
+          deleteWarranty(warrantyId, row, deleteBtn);
         }
       } else if (e.target.classList.contains('edit-btn')) {
         e.preventDefault();
@@ -805,10 +809,15 @@
       document.getElementById('editModal').style.display = 'block';
     }
     
-    function deleteWarranty(warrantyId, row) {
-      const deleteBtn = row.querySelector('.delete-btn');
-      if (deleteBtn.disabled) return;
+    function deleteWarranty(warrantyId, row, deleteBtn) {
+      // Prevent double-clicks and multiple requests
+      if (deleteBtn.disabled || row.dataset.deleting === 'true') return;
       deleteBtn.disabled = true;
+      row.dataset.deleting = 'true';
+      
+      // Immediately fade the row to show it's being deleted
+      row.style.transition = 'opacity 0.3s ease';
+      row.style.opacity = '0.5';
       
       const deleteUrl = `/warranties/${warrantyId}`;
       
@@ -816,13 +825,17 @@
         method: 'DELETE',
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         credentials: 'same-origin'
       })
       .then(response => {
-        if (response.ok || response.status === 404) {
-          row.style.transition = 'opacity 0.3s ease';
+        // Treat 200 (OK), 204 (No Content), and 404 (already deleted) as success
+        const isSuccess = response.ok || response.status === 204 || response.status === 404;
+        
+        if (isSuccess) {
+          // Complete the fade out and remove
           row.style.opacity = '0';
           setTimeout(() => {
             row.remove();
@@ -832,12 +845,19 @@
             }
           }, 300);
         } else {
-          alert('Failed to delete warranty. Please try again.');
+          // Restore the row if deletion failed
+          deleteBtn.disabled = false;
+          delete row.dataset.deleting;
+          row.style.opacity = '1';
+          console.error('Delete failed with status:', response.status);
         }
       })
       .catch(error => {
+        // Restore the row if there was an error
+        deleteBtn.disabled = false;
+        delete row.dataset.deleting;
+        row.style.opacity = '1';
         console.error('Error deleting warranty:', error);
-        alert('An error occurred. Please try again.');
       });
     }
     
