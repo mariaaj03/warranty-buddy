@@ -50,7 +50,7 @@ class DashboardController < ApplicationController
       file_data = uploaded_file.read
       file_extension = File.extname(uploaded_file.original_filename).downcase
 
-      receipt_processor = ReceiptProcessor.new
+      receipt_processor = ReceiptProcessor.new(current_user)
       begin
         if file_extension == ".pdf"
           receipt_data = receipt_processor.process_pdf(file_data)
@@ -68,7 +68,14 @@ class DashboardController < ApplicationController
       end
 
       if receipt_data.nil? && extraction_error.nil?
-        extraction_error = "Could not extract information from receipt. Please enter details manually."
+        vision_api_key = Rails.application.credentials.dig(:google, :vision_api_key) || ENV["GOOGLE_VISION_API_KEY"]
+        has_oauth = current_user&.gmail_token.present? && current_user&.gmail_refresh_token.present?
+        
+        if vision_api_key.blank? && !has_oauth
+          extraction_error = "Could not extract information from receipt. Vision API is not configured. To fix this: 1) Go to https://console.cloud.google.com/apis/credentials 2) Click 'Create Credentials' → 'API Key' 3) Copy the key and add it to your credentials as 'vision_api_key' under 'google', or set GOOGLE_VISION_API_KEY environment variable. Alternatively, connect your Gmail account to use OAuth credentials."
+        else
+          extraction_error = "Could not extract information from receipt. The image may be unclear or the format is not recognized. Please enter details manually."
+        end
       end
     end
 
@@ -157,10 +164,17 @@ class DashboardController < ApplicationController
   end
 
   def parse_gmail_receipts
-    return redirect_to dashboard_path unless @gmail_connected
+    unless @gmail_connected
+      redirect_to dashboard_path, alert: "Please connect your Gmail account first"
+      return
+    end
 
     begin
-      gmail_service = GmailService.new(current_user.gmail_token)
+      gmail_service = GmailService.new(
+        current_user.gmail_token,
+        current_user.gmail_refresh_token,
+        current_user
+      )
       parsed_receipts = gmail_service.parse_receipt_emails
 
       created_count = 0

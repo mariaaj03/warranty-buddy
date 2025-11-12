@@ -5,9 +5,46 @@ require "nokogiri"
 class GmailFetcher
   Gmail = Google::Apis::GmailV1
 
-  def initialize(access_token)
+  def initialize(access_token, refresh_token = nil, user = nil)
     @service = Gmail::GmailService.new
-    @service.authorization = access_token
+    @refresh_token = refresh_token
+    @user = user
+    
+    if refresh_token && user
+      setup_authorization_with_refresh(access_token, refresh_token, user)
+    else
+      @service.authorization = access_token
+    end
+  end
+
+  def setup_authorization_with_refresh(access_token, refresh_token, user)
+    require "googleauth"
+    
+    client_id = Rails.application.credentials.dig(:google, :client_id) || ENV["GOOGLE_CLIENT_ID"]
+    client_secret = Rails.application.credentials.dig(:google, :client_secret) || ENV["GOOGLE_CLIENT_SECRET"]
+    
+    return unless client_id.present? && client_secret.present?
+    
+    credentials = Google::Auth::UserRefreshCredentials.new(
+      client_id: client_id,
+      client_secret: client_secret,
+      refresh_token: refresh_token,
+      access_token: access_token
+    )
+    
+    if credentials.expired? || credentials.expires_at.nil? || (credentials.expires_at && credentials.expires_at < Time.now)
+      begin
+        credentials.refresh!
+        user.update(
+          gmail_token: credentials.access_token,
+          gmail_refresh_token: credentials.refresh_token || refresh_token
+        )
+      rescue => e
+        Rails.logger.error "Failed to refresh Gmail token: #{e.message}"
+      end
+    end
+    
+    @service.authorization = credentials
   end
 
   def service

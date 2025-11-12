@@ -1,9 +1,9 @@
 require "tempfile"
 
 class ReceiptProcessor
-  def initialize
+  def initialize(user = nil)
     @temp_files = []
-    @vision_service = GoogleVisionService.new
+    @vision_service = GoogleVisionService.new(nil, user)
     @ai_service = AiService.new
   end
 
@@ -25,18 +25,75 @@ class ReceiptProcessor
     return nil unless image_data.present?
 
     begin
+      image_base64 = Base64.strict_encode64(image_data)
+      
       text = @vision_service.extract_text_from_image(image_data)
+      
+      ai_result = nil
+      begin
+        Rails.logger.info "🤖 Using AI to extract receipt information from image..."
+        ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
+      rescue => ai_error
+        Rails.logger.warn "AI extraction failed: #{ai_error.message}"
+      end
+      
       if text.blank?
-        Rails.logger.warn "No text extracted from image. Vision API may not be configured or image may not contain readable text."
+        if ai_result && ai_result["is_receipt"] == true
+          Rails.logger.info "✅ AI extracted receipt from image: #{ai_result['product_name']} from #{ai_result['merchant']}"
+          return format_ai_result(ai_result)
+        end
+        Rails.logger.warn "Vision API key configured: #{@vision_service.instance_variable_get(:@api_key).present?}"
+        Rails.logger.warn "OAuth configured: #{@vision_service.instance_variable_get(:@user).present?}"
         return nil
       end
 
       Rails.logger.info "Extracted #{text.length} characters from image"
-      result = parse_receipt_text_first(text)
-      Rails.logger.info "Parsed receipt data: #{result.inspect}" if result
-      result
+      Rails.logger.debug "First 500 chars of extracted text: #{text[0..500]}"
+      
+      regex_result = parse_receipt_text_first(text)
+      
+      if ai_result && ai_result["is_receipt"] == true
+        Rails.logger.info "✅ AI extracted receipt: #{ai_result['product_name']} from #{ai_result['merchant']}"
+        
+        if regex_result && regex_result[:line_items]&.any? && regex_result[:product_name].present?
+          Rails.logger.info "✅ Regex also found: #{regex_result[:product_name]}"
+          
+          if is_valid_product_name(ai_result["product_name"]) && !is_valid_product_name(regex_result[:product_name])
+            Rails.logger.info "Using AI result (better product name)"
+            return format_ai_result(ai_result)
+          end
+        end
+        
+        return format_ai_result(ai_result)
+      end
+      
+      if regex_result
+        Rails.logger.info "✅ Parsed receipt data: merchant=#{regex_result[:merchant]}, product=#{regex_result[:product_name]}, items=#{regex_result[:line_items]&.length || 0}"
+      else
+        Rails.logger.warn "⚠️ Receipt parsing returned nil - text was extracted but couldn't parse structure"
+        Rails.logger.debug "Full extracted text: #{text[0..1000]}"
+      end
+      
+      regex_result
     rescue => e
       Rails.logger.error "Image OCR processing failed: #{e.message}"
+      
+      if e.message.include?("PERMISSION_DENIED") || e.message.include?("insufficient authentication scopes")
+        Rails.logger.warn "⚠️ Vision API permission denied - trying AI extraction..."
+        
+        begin
+          image_base64 = Base64.strict_encode64(image_data)
+          ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
+          
+          if ai_result && ai_result["is_receipt"] == true
+            Rails.logger.info "✅ AI fallback succeeded: #{ai_result['product_name']} from #{ai_result['merchant']}"
+            return format_ai_result(ai_result)
+          end
+        rescue => ai_error
+          Rails.logger.warn "AI fallback also failed: #{ai_error.message}"
+        end
+      end
+      
       Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
@@ -53,6 +110,103 @@ class ReceiptProcessor
   end
 
   private
+
+  def format_ai_result(ai_result)
+    {
+      product_name: ai_result["product_name"],
+      merchant: ai_result["merchant"],
+      purchase_date: parse_date_string(ai_result["purchase_date"]),
+      line_items: [{ name: ai_result["product_name"], quantity: 1, price: nil }],
+      total_amount: nil,
+      order_number: nil,
+      warranty_length_months: ai_result["warranty_length_months"],
+      warranty_type: ai_result["warranty_type"],
+      return_policy_days: ai_result["return_policy_days"],
+      return_deadline: parse_date_string(ai_result["return_deadline"])
+    }
+  end
+
+  def parse_date_string(date_str)
+    return nil if date_str.blank?
+
+    date_str = date_str.to_s.strip
+    
+    if date_str.match?(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2}$/)
+      parts = date_str.split(/[\/\-]/)
+      month = parts[0].to_i
+      day = parts[1].to_i
+      year = parts[2].to_i
+      
+      year += 2000 if year < 50
+      year += 1900 if year < 100
+      
+      if month >= 1 && month <= 12 && day >= 1 && day <= 31
+        begin
+          return Date.new(year, month, day)
+        rescue ArgumentError
+          nil
+        end
+      end
+    end
+    
+    if date_str.match?(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/)
+      parts = date_str.split(/[\/\-]/)
+      month = parts[0].to_i
+      day = parts[1].to_i
+      year = parts[2].to_i
+      
+      if month >= 1 && month <= 12 && day >= 1 && day <= 31
+        begin
+          return Date.new(year, month, day)
+        rescue ArgumentError
+          nil
+        end
+      end
+    end
+    
+    if date_str.match?(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/)
+      parts = date_str.split(/[\/\-]/)
+      year = parts[0].to_i
+      month = parts[1].to_i
+      day = parts[2].to_i
+      
+      if month >= 1 && month <= 12 && day >= 1 && day <= 31
+        begin
+          return Date.new(year, month, day)
+        rescue ArgumentError
+          nil
+        end
+      end
+    end
+    
+    begin
+      Date.parse(date_str)
+    rescue ArgumentError
+      nil
+    end
+  end
+
+  def is_valid_product_name(name)
+    return false if name.blank?
+    
+    invalid_terms = [
+      "customer service", "contact us", "help", "support", "returns",
+      "exchange", "refund", "policy", "terms", "conditions", "order",
+      "receipt", "invoice", "confirmation", "payment method", "purchased",
+      "subtotal", "total", "tax", "shipping", "discount", "merchant",
+      "store", "thank you", "part number", "serial number", "imei",
+      "return date", "for support", "www", "http", "email", "phone",
+      "address", "warranty", "months"
+    ]
+    
+    name_lower = name.downcase.strip
+    return false if invalid_terms.any? { |term| name_lower == term || name_lower.include?(term) }
+    return false if name.length < 3
+    return false if name.match?(/^\d+$/)
+    return false if name.match?(/^\$/)
+    
+    true
+  end
 
   def create_temp_file(data, extension)
     temp_file = Tempfile.new([ "receipt", extension ])
@@ -80,31 +234,36 @@ class ReceiptProcessor
     
     if result && result[:line_items]&.any?
       result[:product_name] = result[:line_items].first[:name]
+      Rails.logger.info "✅ Regex parsing succeeded: #{result[:product_name]} from #{result[:merchant]}"
       return result
     end
 
+    Rails.logger.info "🤖 Regex parsing found no line items, trying AI extraction..."
     begin
       ai_result = @ai_service.extract_receipt_info(text)
       
       if ai_result && ai_result["is_receipt"] == true
         product_name = ai_result["product_name"]
+        Rails.logger.info "✅ AI extraction succeeded: #{product_name} from #{ai_result['merchant']}"
         {
           product_name: product_name,
-          merchant: ai_result["merchant"],
-          purchase_date: ai_result["purchase_date"] ? Date.parse(ai_result["purchase_date"]) : nil,
+          merchant: ai_result["merchant"] || result&.dig(:merchant),
+          purchase_date: parse_date_string(ai_result["purchase_date"]) || result&.dig(:purchase_date),
           line_items: [{ name: product_name, quantity: 1, price: nil }],
-          total_amount: nil,
-          order_number: nil,
+          total_amount: result&.dig(:total_amount),
+          order_number: result&.dig(:order_number),
           warranty_length_months: ai_result["warranty_length_months"],
           warranty_type: ai_result["warranty_type"],
           return_policy_days: ai_result["return_policy_days"],
-          return_deadline: ai_result["return_deadline"] ? Date.parse(ai_result["return_deadline"]) : nil
+          return_deadline: parse_date_string(ai_result["return_deadline"])
         }
       else
+        Rails.logger.warn "⚠️ AI did not recognize this as a receipt"
         result
       end
     rescue => e
-      Rails.logger.warn "AI parsing failed (rate limit?): #{e.message}"
+      Rails.logger.warn "⚠️ AI parsing failed: #{e.message}"
+      Rails.logger.warn e.backtrace.first(3).join("\n")
       result
     end
   end
@@ -134,19 +293,27 @@ class ReceiptProcessor
       "Apple",
       "Microsoft",
       "Home\\s+Depot",
-      "Lowes"
+      "Lowes",
+      "Victoria'?s\\s+Secret",
+      "Sephora",
+      "Nordstrom",
+      "Macy'?s",
+      "Ulta",
+      "Zappos"
     ]
 
     common_merchants.each do |merchant_pattern|
       if text.match?(/#{merchant_pattern}/i)
-        # Return the cleaned up name without regex escapes
-        return merchant_pattern.gsub(/\\s\+/, " ")
+        cleaned = merchant_pattern.gsub(/\\s\+/, " ").gsub(/'\\?s/, "'s").gsub(/\\/, "")
+        return cleaned
       end
     end
 
     # Look for patterns like "Thank you for shopping at [Store]"
     if match = text.match(/thank you for shopping at\s+([^\n\r]{2,50})/i)
-      return match[1].strip
+      merchant = match[1].strip
+      merchant = merchant.split(',').first.strip if merchant.include?(',')
+      return merchant
     end
 
     # Look for patterns like "Store: [Name]"
@@ -173,7 +340,8 @@ class ReceiptProcessor
       /\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\b/i,
       /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4})\b/i,
       /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2})\b/
     ]
 
     lines.each do |line|
@@ -199,14 +367,10 @@ class ReceiptProcessor
           
           date_str = date_str.strip
           
-          begin
-            parsed_date = Date.parse(date_str)
-            if parsed_date <= Date.today && parsed_date >= Date.today - 3650
-              Rails.logger.info "Extracted date: #{parsed_date} from line: #{line} (parsed from: #{date_str})"
-              return parsed_date
-            end
-          rescue ArgumentError => e
-            Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
+          parsed_date = parse_date_string(date_str)
+          if parsed_date && parsed_date <= Date.today && parsed_date >= Date.today - 3650
+            Rails.logger.info "Extracted date: #{parsed_date} from line: #{line} (parsed from: #{date_str})"
+            return parsed_date
           end
         end
       end
@@ -228,14 +392,10 @@ class ReceiptProcessor
         
         date_str = date_str.strip
         
-        begin
-          parsed_date = Date.parse(date_str)
-          if parsed_date <= Date.today && parsed_date >= Date.today - 3650
-            Rails.logger.info "Extracted date: #{parsed_date} from text (parsed from: #{date_str})"
-            return parsed_date
-          end
-        rescue ArgumentError => e
-          Rails.logger.warn "Failed to parse date: #{date_str} - #{e.message}"
+        parsed_date = parse_date_string(date_str)
+        if parsed_date && parsed_date <= Date.today && parsed_date >= Date.today - 3650
+          Rails.logger.info "Extracted date: #{parsed_date} from text (parsed from: #{date_str})"
+          return parsed_date
         end
       end
     end
@@ -251,7 +411,9 @@ class ReceiptProcessor
       /payment method/i, /purchased/i, /subtotal/i, /total/i, /tax/i, /shipping/i,
       /discount/i, /order/i, /receipt/i, /merchant/i, /store/i, /thank you/i,
       /part number/i, /serial number/i, /imei/i, /return date/i, /for support/i,
-      /www\./i, /http/i, /email/i, /phone/i, /address/i, /warranty/i, /months/i
+      /www\./i, /http/i, /email/i, /phone/i, /address/i, /warranty/i, /months/i,
+      /customer service/i, /contact us/i, /help/i, /support/i, /returns/i,
+      /exchange/i, /refund/i, /policy/i, /terms/i, /conditions/i
     ]
 
     lines.each_with_index do |line, index|
@@ -287,7 +449,7 @@ class ReceiptProcessor
             price_match = price_line.match(/\$\s*([0-9]{1,3}(?:[,\s][0-9]{3})*(?:\.[0-9]{2})?)/)
             if price_match
               price = parse_price(price_match[1])
-              if price && price > 0 && price < 100000
+              if price && price > 0 && price < 100000 && is_valid_product_name(line)
                 items << {
                   name: line,
                   quantity: 1,
@@ -331,7 +493,7 @@ class ReceiptProcessor
             next if prev_line.match?(/\d{2}:\d{2}/)
             next if prev_line.match?(/^(part number|serial|imei|return|for support)/i)
             
-            if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/) && !prev_line.match?(/^\d+$/)
+            if prev_line.match?(/^[A-Z][a-zA-Z0-9\s\-]{8,100}$/) && !prev_line.match?(/^\d+$/) && is_valid_product_name(prev_line)
               items << {
                 name: prev_line,
                 quantity: 1,

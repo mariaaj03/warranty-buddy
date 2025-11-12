@@ -8,8 +8,9 @@ require "cgi"
 require "tempfile"
 
 class GoogleVisionService
-  def initialize(api_key = nil)
+  def initialize(api_key = nil, user = nil)
     @api_key = api_key || ENV["GOOGLE_VISION_API_KEY"] || Rails.application.credentials.dig(:google, :vision_api_key)
+    @user = user
     @service = Google::Apis::VisionV1::VisionService.new
     setup_authorization
   end
@@ -100,6 +101,11 @@ class GoogleVisionService
   def setup_authorization
     return if @api_key
 
+    if @user && @user.gmail_token.present? && @user.gmail_refresh_token.present?
+      setup_oauth_authorization
+      return
+    end
+
     credentials_path = Rails.application.credentials.dig(:google, :service_account_path)
     if credentials_path && File.exist?(credentials_path)
       @service.authorization = Google::Auth::ServiceAccountCredentials.make_creds(
@@ -107,6 +113,38 @@ class GoogleVisionService
         scope: "https://www.googleapis.com/auth/cloud-vision"
       )
     end
+  end
+
+  def setup_oauth_authorization
+    require "googleauth"
+    
+    client_id = Rails.application.credentials.dig(:google, :client_id) || ENV["GOOGLE_CLIENT_ID"]
+    client_secret = Rails.application.credentials.dig(:google, :client_secret) || ENV["GOOGLE_CLIENT_SECRET"]
+    
+    return unless client_id.present? && client_secret.present?
+    
+    credentials = Google::Auth::UserRefreshCredentials.new(
+      client_id: client_id,
+      client_secret: client_secret,
+      refresh_token: @user.gmail_refresh_token,
+      access_token: @user.gmail_token,
+      scope: "https://www.googleapis.com/auth/cloud-vision"
+    )
+    
+    if credentials.expired? || credentials.expires_at.nil? || (credentials.expires_at && credentials.expires_at < Time.now)
+      begin
+        credentials.refresh!
+        @user.update(
+          gmail_token: credentials.access_token,
+          gmail_refresh_token: credentials.refresh_token || @user.gmail_refresh_token
+        )
+      rescue => e
+        Rails.logger.error "Failed to refresh Vision API token: #{e.message}"
+        return
+      end
+    end
+    
+    @service.authorization = credentials
   end
 end
 
