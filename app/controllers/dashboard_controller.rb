@@ -118,16 +118,39 @@ class DashboardController < ApplicationController
     else
       receipt_data&.dig(:warranty_length_months)
     end
-    warranty_months ||= 12
+    
+    return_policy_days = receipt_data&.dig(:return_policy_days)
+    return_deadline = receipt_data&.dig(:return_deadline)
+    warranty_type = receipt_data&.dig(:warranty_type)
+    
+    # For manual uploads (no receipt_data), use AI to lookup merchant warranty/return info
+    if receipt_data.nil? && merchant.present? && warranty_months.nil?
+      begin
+        ai_service = AiService.new
+        warranty_info = ai_service.lookup_warranty_info(product_name, merchant)
+        
+        if warranty_info
+          warranty_months ||= warranty_info["standard_warranty_months"]
+          return_policy_days ||= warranty_info["return_policy_days"]
+          warranty_type ||= warranty_info["warranty_type"]
+        end
+      rescue => e
+        Rails.logger.error "AI warranty lookup failed: #{e.message}"
+        # Continue without AI data - don't default to 12 months for manual uploads
+      end
+    end
+    
+    # Only default to 12 months for receipt uploads, not manual uploads
+    warranty_months ||= 12 if receipt_data.present?
 
     current_user.products.create!(
       product_name: product_name,
       merchant: merchant || "",
       purchase_date: purchase_date,
       warranty_months: warranty_months,
-      warranty_type: receipt_data&.dig(:warranty_type),
-      return_policy_days: receipt_data&.dig(:return_policy_days),
-      return_deadline: receipt_data&.dig(:return_deadline),
+      warranty_type: warranty_type,
+      return_policy_days: return_policy_days,
+      return_deadline: return_deadline,
       issue_description: params[:issue_description],
       source: receipt_data ? "receipt_upload" : "manual"
     )

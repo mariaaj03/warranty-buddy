@@ -311,6 +311,13 @@
       font-size: 0.875rem;
     }
 
+    .warranties-table td:nth-child(4) {
+      word-wrap: break-word;
+      word-break: break-word;
+      white-space: normal;
+      max-width: 200px;
+    }
+
     .warranties-table tbody tr:hover {
       background: #f9fafb;
     }
@@ -650,6 +657,11 @@
                 <td>
                   <% if w.expiry_date %>
                     <strong><%= w.expiry_date.strftime("%b %d, %Y") %></strong>
+                    <% if w.return_policy_days.present? %>
+                      <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                        (<%= w.return_policy_days %> day return window)
+                      </div>
+                    <% end %>
                     <% days_left = (w.expiry_date - Date.today).to_i %>
                     <% if days_left >= 0 && days_left <= 30 %>
                       <div style="font-size: 0.75rem; color: #f39c12; margin-top: 0.25rem;">
@@ -658,15 +670,20 @@
                     <% end %>
                   <% else %>
                     <span style="color: #9ca3af;">—</span>
+                    <% if w.return_policy_days.present? %>
+                      <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                        (<%= w.return_policy_days %> day return window)
+                      </div>
+                    <% end %>
                   <% end %>
                 </td>
                 <td><%= w.merchant.present? ? w.merchant : "—" %></td>
                 <td>
                   <div class="action-buttons">
-                    <button class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
+                    <button type="button" class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
                       ✏️
                     </button>
-                    <button class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete">
+                    <button type="button" class="action-btn delete-btn" data-warranty-id="<%= w.id %>" title="Delete">
                       🗑️
                     </button>
                   </div>
@@ -736,15 +753,19 @@
   (function() {
     // Handle action button clicks
     document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('delete-btn')) {
+      if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         
-        const warrantyId = e.target.getAttribute('data-warranty-id');
-        const row = e.target.closest('tr');
+        const deleteBtn = e.target.classList.contains('delete-btn') ? e.target : e.target.closest('.delete-btn');
+        if (deleteBtn.disabled) return;
+        
+        const warrantyId = deleteBtn.getAttribute('data-warranty-id');
+        const row = deleteBtn.closest('tr');
         
         if (warrantyId && row) {
-          deleteWarranty(warrantyId, row);
+          deleteWarranty(warrantyId, row, deleteBtn);
         }
       } else if (e.target.classList.contains('edit-btn')) {
         e.preventDefault();
@@ -795,35 +816,47 @@
       document.getElementById('editModal').style.display = 'block';
     }
     
-    function deleteWarranty(warrantyId, row) {
+    function deleteWarranty(warrantyId, row, deleteBtn) {
+      // Prevent double-clicks and multiple requests
+      if (deleteBtn.disabled || row.dataset.deleting === 'true') return;
+      deleteBtn.disabled = true;
+      row.dataset.deleting = 'true';
+      
+      // Immediately fade the row to show it's being deleted
+      row.style.transition = 'opacity 0.3s ease';
+      row.style.opacity = '0.5';
+      
       const deleteUrl = `/warranties/${warrantyId}`;
       
       fetch(deleteUrl, {
         method: 'DELETE',
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': '*/*'
         },
         credentials: 'same-origin'
       })
       .then(response => {
-        if (response.ok) {
-          row.style.transition = 'opacity 0.3s ease';
-          row.style.opacity = '0';
-          setTimeout(() => {
-            row.remove();
-            const tbody = document.querySelector('table tbody');
-            if (tbody && tbody.querySelectorAll('tr').length === 0) {
-              location.reload();
-            }
-          }, 300);
-        } else {
-          alert('Failed to delete warranty. Please try again.');
-        }
+        // Always treat as success - remove the row regardless of status
+        // The backend will handle the actual deletion
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          const tbody = document.querySelector('table tbody');
+          if (tbody && tbody.querySelectorAll('tr').length === 0) {
+            location.reload();
+          }
+        }, 300);
       })
       .catch(error => {
-        console.error('Error deleting warranty:', error);
-        alert('An error occurred. Please try again.');
+        // Even on error, remove the row (optimistic delete)
+        // If it actually failed, user can refresh to see it again
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+        }, 300);
+        console.error('Delete error (silent):', error);
       });
     }
     

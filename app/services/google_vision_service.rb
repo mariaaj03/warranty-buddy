@@ -38,6 +38,11 @@ class GoogleVisionService
         uri = URI("https://vision.googleapis.com/v1/images:annotate?key=#{CGI.escape(@api_key)}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
+        
+        # In development, allow self-signed certificates and skip CRL checks
+        if Rails.env.development?
+          http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+        end
 
         request = Net::HTTP::Post.new(uri.request_uri)
         request["Content-Type"] = "application/json"
