@@ -104,8 +104,12 @@ EDITOR="nano" rails credentials:edit
    - Save and continue through all steps
 4. Create OAuth client:
    - Application type: Web application
-   - **Authorized JavaScript origins**: `http://localhost:3000`
-   - **Authorized redirect URIs**: `http://localhost:3000/users/auth/google_oauth2/callback`
+   - **Authorized JavaScript origins** (add both):
+     - `http://localhost:3000`
+     - `https://safe-reef-46455-4dc844325c04.herokuapp.com`
+   - **Authorized redirect URIs** (add both):
+     - `http://localhost:3000/users/auth/google_oauth2/callback`
+     - `https://safe-reef-46455-4dc844325c04.herokuapp.com/users/auth/google_oauth2/callback`
    - Click "Create"
    - **Copy Client ID and Client Secret**
 
