@@ -832,7 +832,8 @@
       })
       .then(response => {
         // Treat 200 (OK), 204 (No Content), and 404 (already deleted) as success
-        const isSuccess = response.ok || response.status === 204 || response.status === 404;
+        const status = response.status;
+        const isSuccess = status === 200 || status === 204 || status === 404 || response.ok;
         
         if (isSuccess) {
           // Complete the fade out and remove
@@ -845,11 +846,11 @@
             }
           }, 300);
         } else {
-          // Restore the row if deletion failed
+          // Restore the row if deletion failed (but don't show alert)
           deleteBtn.disabled = false;
           delete row.dataset.deleting;
           row.style.opacity = '1';
-          console.error('Delete failed with status:', response.status);
+          console.error('Delete failed with status:', status);
         }
       })
       .catch(error => {
