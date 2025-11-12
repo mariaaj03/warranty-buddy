@@ -1,4 +1,4 @@
-# Warranty Buddy - Iteration 1
+# Warranty Buddy
 
 Your Digital Memory for Every Purchase
 
@@ -37,296 +37,151 @@ Warranty Buddy is a Rails application that helps users track product warranties 
 
 ## Prerequisites
 
-Before running this application, ensure you have the following installed:
-
 - Ruby 3.2.2
 - PostgreSQL 14 or higher
-- Bundler gem
-- Node.js (for asset compilation)
-- Tesseract
+- Bundler (`gem install bundler` if not installed)
 
 ## Setup Instructions
 
-### 1. Clone the Repository
+### 1. Clone and Checkout Branch
 
 ```bash
 git clone https://github.com/mariaaj03/warranty-buddy.git
-cd warranty-buddy/warranty-buddy
+cd warranty-buddy
+git checkout iteration2
 ```
 
 ### 2. Install Dependencies
 
 ```bash
 bundle install
-brew install tesseract
 ```
 
-### 3. Configure Credentials
-
-The application requires Google OAuth and Gemini AI credentials. Set up your credentials:
-
-```bash
-EDITOR="code --wait" rails credentials:edit
-```
-
-Add the following structure:
-
-```yaml
-google:
-  .env will send separtly 
-```
-
-**To obtain credentials:**
-
-- **Google OAuth**: Visit [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials
-- **Gemini API**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-
-### 4. Setup Database
+### 3. Set Up Database
 
 ```bash
 rails db:create
 rails db:migrate
 ```
 
-### 5. Start the Application
+### 4. Get Master Key
+
+You need the `config/master.key` file to decrypt credentials. Get this from a team member or create new credentials:
 
 ```bash
-bin/dev
+# If you have the master.key file, copy it to config/master.key
+# Otherwise, create new credentials:
+rm config/credentials.yml.enc
+EDITOR="nano" rails credentials:edit
 ```
 
-Or use Rails server directly:
+### 5. Set Up Google API Credentials
+
+**You need to create your own Google Cloud project and API keys for local development.**
+
+#### Step 5a: Create Google Cloud Project and Enable APIs
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable these APIs (APIs & Services → Library):
+   - Gmail API
+   - Cloud Vision API
+   - Vision AI API
+   - Google Calendar API
+   - Google+ API
+   - People API
+   - Gemini API
+   - AI Studio API
+
+#### Step 5b: Create OAuth Credentials
+
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "OAuth client ID"
+3. Configure OAuth consent screen (if prompted):
+   - User type: External
+   - App name: Warranty Buddy
+   - Add your email for support and developer contact
+   - Save and continue through all steps
+4. Create OAuth client:
+   - Application type: Web application
+   - **Authorized JavaScript origins**: `http://localhost:3000`
+   - **Authorized redirect URIs**: `http://localhost:3000/users/auth/google_oauth2/callback`
+   - Click "Create"
+   - **Copy Client ID and Client Secret**
+
+#### Step 5c: Get API Key
+
+1. In "APIs & Services" → "Credentials", create the API key 
+2. Copy the API key - **this same key works for both Gemini and Vision APIs** (they're in the same Google Cloud project)
+
+#### Step 5d: Add Credentials to Rails
+
+```bash
+EDITOR="nano" rails credentials:edit
+```
+
+Add this structure (replace with your actual keys):
+
+```yaml
+google:
+  client_id: YOUR_CLIENT_ID_HERE
+  client_secret: YOUR_CLIENT_SECRET_HERE
+  gemini_api_key: YOUR_API_KEY_HERE
+  vision_api_key: YOUR_API_KEY_HERE
+```
+
+**Note:** Use the same API key for both `gemini_api_key` and `vision_api_key` since they're from the same Google Cloud project.
+
+Save and exit (Ctrl+X, Y, Enter in nano).
+
+Verify it worked:
+```bash
+rails credentials:show
+```
+
+### 6. Start the Server
 
 ```bash
 rails server
 ```
 
-The application will be available at `http://localhost:3000`
+Visit **http://localhost:3000**
+
+## Using the App
+
+1. Sign up or sign in
+2. Click "Connect Gmail" to link your Gmail account
+3. Add warranties manually or upload receipt images
+4. Use "Parse Gmail Receipts" to automatically extract warranties from emails
 
 ## Running Tests
 
-### Run All Tests (RSpec + Cucumber)
-
 ```bash
 bundle exec rspec
-bundle exec cucumber --strict
+bundle exec cucumber
+open coverage/index.html  # View coverage report
 ```
 
-### Run Tests with Coverage Report
+## Viewing the Deployed App
 
-```bash
-COVERAGE=true bundle exec rspec && bundle exec cucumber --strict
-open coverage/index.html
-```
-
-### Run Individual Test Suites
-
-**RSpec only:**
-```bash
-bundle exec rspec
-```
-
-**Cucumber only:**
-```bash
-bundle exec cucumber --strict
-```
-
-**Specific feature file:**
-```bash
-bundle exec cucumber features/dashboard.feature
-```
-
-**Specific scenario:**
-```bash
-bundle exec cucumber features/dashboard.feature:25
-```
-
-### Test Coverage
-
-Current test coverage: **85.9% line coverage**, 69.97% branch coverage
-
-- **37 Cucumber scenarios** (37 passing)
-- **343 Cucumber steps** (343 passing)
-- **RSpec tests** covering models, controllers, services, and views
-
-## Usage Guide
-
-### First-Time Setup
-
-1. Visit `http://localhost:3000`
-2. Click "Connect Gmail" to authenticate with Google
-3. Grant Gmail read permissions to the application
-
-### Adding Warranties
-
-**Manual Entry:**
-1. Expand "Add a product warranty" section
-2. Fill in product details (product name required)
-3. Click "Add warranty"
-
-**Gmail Parsing:**
-1. Ensure Gmail is connected
-2. Click "Parse Gmail Receipts"
-3. System will automatically extract warranty information from receipts
-
-### Managing Warranties
-
-**Edit:**
-- Click the ✏️ (edit) button next to any warranty
-- Update details in the modal
-- Click "Save Changes"
-
-**Delete:**
-- Click the 🗑️ (delete) button next to any warranty
-- Warranty will be removed immediately
-
-**Filter/Search:**
-- Use the filter bar to search by product/merchant name
-- Filter by status (Active, Expired, Expiring Soon)
-- Filter by merchant
-- Sort by expiry date, product name, purchase date, or merchant
-- Click "Apply" to apply filters
-- Click "Reset" to clear all filters
-
-**Export:**
-- **CSV**: Click "⬇️ Export CSV" to download all warranties
-- **iCal**: Click "📅 Export iCal" with optional reminder checkboxes
-
-## Project Structure
-
-```
-warranty-buddy/
-├── app/
-│   ├── controllers/        # Application controllers
-│   ├── models/            # ActiveRecord models
-│   ├── services/          # Service layer (Gmail, AI, parsing)
-│   ├── views/             # ERB templates
-│   └── javascript/        # Frontend JavaScript
-├── config/
-│   ├── routes.rb          # Application routes
-│   ├── database.yml       # Database configuration
-│   └── initializers/      # App initializers (OmniAuth, etc.)
-├── db/
-│   ├── migrate/           # Database migrations
-│   └── schema.rb          # Database schema
-├── features/              # Cucumber feature files
-│   ├── dashboard.feature  # Main dashboard scenarios
-│   └── step_definitions/  # Cucumber step definitions
-├── spec/                  # RSpec tests
-│   ├── models/           # Model tests
-│   ├── requests/         # Request/controller tests
-│   ├── services/         # Service tests
-│   └── views/            # View tests
-└── README.md             # This file
-```
-
-## Key Services
-
-### AiService
-Interfaces with Google Gemini AI for:
-- Receipt text parsing
-- Warranty information lookup
-- Warranty eligibility checking
-
-### GmailService
-Handles Gmail integration:
-- Fetching receipt emails
-- Parsing email content
-- Extracting order information
-
-### ReceiptProcessor
-Processes receipt images using OCR (Tesseract) and extracts structured data.
-
-### MerchantParsers
-Specialized parsers for different merchants:
-- Amazon
-- Best Buy
-- eBay
-- Target
-- Walmart
-
-## API Endpoints
-
-- `GET /` - Dashboard (main page)
-- `POST /upload` - Add warranty manually
-- `POST /parse_gmail_receipts` - Parse Gmail receipts
-- `PATCH /warranties/:id` - Update warranty
-- `DELETE /warranties/:id` - Delete warranty
-- `GET /products/export.csv` - Export to CSV
-- `GET /products/calendar` - Export to iCal
-- `GET /auth/google_oauth2` - Initiate OAuth
-- `GET /auth/google_oauth2/callback` - OAuth callback
-- `POST /disconnect_gmail` - Disconnect Gmail
-- `GET /dashboard/api_health` - API health check
-- `GET /dashboard/api_warranties` - Get warranties as JSON
+The app is deployed on Heroku and can be accessed at:
+**https://safe-reef-46455-4dc844325c04.herokuapp.com**
 
 ## Troubleshooting
 
-### Database Connection Issues
+**Database errors?**
 ```bash
-# Ensure PostgreSQL is running
-brew services start postgresql@14
-
-# Recreate database
-rails db:drop db:create db:migrate
+brew services start postgresql@14  # macOS
 ```
 
-### Test Failures
-```bash
-# Ensure test database is set up
-RAILS_ENV=test rails db:create db:migrate
+**Master key missing?**
+- Get `config/master.key` from a team member, or create new credentials (see Step 4)
 
-# Clear test cache
-rm -rf tmp/cache/
-```
+**Gmail not connecting?**
+- Verify redirect URI in Google Cloud Console: `http://localhost:3000/users/auth/google_oauth2/callback`
+- Make sure Gmail API is enabled
+- Restart server after updating credentials
 
-### OAuth Issues
-- Verify credentials are correctly set in `rails credentials:edit`
-- Ensure redirect URI matches Google Cloud Console settings
-- Check that OAuth consent screen is configured
-
-## Development
-
-### Running in Development Mode
-
-```bash
-bin/dev
-```
-
-This starts:
-- Rails server
-- Asset compilation (if configured)
-- Background jobs (if configured)
-
-### Code Quality Tools
-
-```bash
-# Run RuboCop (linter)
-bin/rubocop
-
-# Run Brakeman (security scanner)
-bin/brakeman
-
-# Run Bundler Audit (dependency security)
-bin/bundler-audit
-```
-
-## Deployment
-
-The application is configured for deployment with Kamal. See `config/deploy.yml` for deployment settings.
-
-## Contributing
-
-1. Create a feature branch from `maria` branch
-2. Make your changes
-3. Run tests: `bundle exec rspec && bundle exec cucumber --strict`
-4. Ensure coverage remains above 85%
-5. Push to your branch
-6. Create a pull request
-
-## License
-
-This project is part of a university course assignment.
-
-## Support
-
-For issues or questions, please contact the team members listed above.
+**API key errors?**
+- Check keys in `rails credentials:show`
+- Restart server after changes
