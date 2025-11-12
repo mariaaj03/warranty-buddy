@@ -325,24 +325,62 @@ class ReceiptProcessor
   end
 
   def extract_date_from_receipt(text)
-    # Look for various date patterns
-    date_patterns = [
-      # Format: 01/12/2025, 1/12/2025, 10-12-2025
-      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-      # Format: 2025-01-12
-      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
-      # Format: December 12, 2025 or Dec 12, 2025
-      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
-      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
-      # Format: 12 December 2025
-      /\b\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i,
-      # Look for "Date of purchase:", "Purchase date:", "Purchased:", etc.
-      /(?:date of purchase|purchase date|purchased|bought on)[:\s]+([^\n\r]{8,30})/i,
-      # Look for "Valid until:", "Expires:", "Coverage End Date:", etc.
-      /(?:valid until|expires|coverage end date|warranty until|warranty valid until)[:\s]+([^\n\r]{8,30})/i
+    # First, look for warranty/coverage end dates and calculate purchase date
+    warranty_end_patterns = [
+      /(?:coverage end date|warranty (?:valid )?until|expires?(?:\s+on)?)[:\s]+([^\n\r]{8,30})/i,
+      /(?:valid until|coverage until)[:\s]+([^\n\r]{8,30})/i
     ]
     
-
+    warranty_end_patterns.each do |pattern|
+      if match = text.match(pattern)
+        date_str = match[1].strip
+        
+        # Remove time if present
+        if date_str.match?(/\d{1,2}:\d{2}/)
+          date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first
+        end
+        
+        begin
+          warranty_end_date = Date.parse(date_str)
+          
+          # Check if this is a valid future/recent warranty end date
+          if warranty_end_date >= Date.today - 365 && warranty_end_date <= Date.today + 3650
+            # Look for warranty period (e.g., "24 months", "2 years")
+            warranty_period_months = nil
+            
+            if text.match?(/warranty\s+period[:\s]+(\d+)\s+months?/i)
+              warranty_period_months = text.match(/warranty\s+period[:\s]+(\d+)\s+months?/i)[1].to_i
+            elsif text.match?(/(\d+)\s+months?\s+warranty/i)
+              warranty_period_months = text.match(/(\d+)\s+months?\s+warranty/i)[1].to_i
+            elsif text.match?(/(\d+)\s+year\s+warranty/i)
+              warranty_period_months = text.match(/(\d+)\s+year\s+warranty/i)[1].to_i * 12
+            end
+            
+            # Default to 12 months if not found
+            warranty_period_months ||= 12
+            
+            # Calculate purchase date
+            purchase_date = warranty_end_date - warranty_period_months.months
+            
+            Rails.logger.info "Found warranty end date: #{warranty_end_date}, period: #{warranty_period_months} months, calculated purchase date: #{purchase_date}"
+            return purchase_date
+          end
+        rescue ArgumentError
+          # Continue to next pattern
+        end
+      end
+    end
+    
+    # If no warranty end date found, look for purchase dates
+    date_patterns = [
+      /(?:date of purchase|purchase date|purchased|bought on)[:\s]+([^\n\r]{8,30})/i,
+      /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
+      /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/,
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i,
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/i,
+      /\b\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i
+    ]
+      
     date_patterns.each do |pattern|
       if match = text.match(pattern)
         date_str = match[1] || match[0]
@@ -366,7 +404,7 @@ class ReceiptProcessor
         end
       end
     end
-
+  
     nil
   end
 
