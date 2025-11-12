@@ -650,6 +650,11 @@
                 <td>
                   <% if w.expiry_date %>
                     <strong><%= w.expiry_date.strftime("%b %d, %Y") %></strong>
+                    <% if w.return_policy_days.present? %>
+                      <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                        (<%= w.return_policy_days %> day return window)
+                      </div>
+                    <% end %>
                     <% days_left = (w.expiry_date - Date.today).to_i %>
                     <% if days_left >= 0 && days_left <= 30 %>
                       <div style="font-size: 0.75rem; color: #f39c12; margin-top: 0.25rem;">
@@ -658,6 +663,11 @@
                     <% end %>
                   <% else %>
                     <span style="color: #9ca3af;">—</span>
+                    <% if w.return_policy_days.present? %>
+                      <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                        (<%= w.return_policy_days %> day return window)
+                      </div>
+                    <% end %>
                   <% end %>
                 </td>
                 <td><%= w.merchant.present? ? w.merchant : "—" %></td>
@@ -796,6 +806,10 @@
     }
     
     function deleteWarranty(warrantyId, row) {
+      const deleteBtn = row.querySelector('.delete-btn');
+      if (deleteBtn.disabled) return;
+      deleteBtn.disabled = true;
+      
       const deleteUrl = `/warranties/${warrantyId}`;
       
       fetch(deleteUrl, {
@@ -807,7 +821,7 @@
         credentials: 'same-origin'
       })
       .then(response => {
-        if (response.ok) {
+        if (response.ok || response.status === 404) {
           row.style.transition = 'opacity 0.3s ease';
           row.style.opacity = '0';
           setTimeout(() => {
