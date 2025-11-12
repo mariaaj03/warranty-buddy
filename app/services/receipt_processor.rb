@@ -327,6 +327,9 @@ class ReceiptProcessor
   def extract_date_from_receipt(text)
     # First, look for warranty/coverage end dates and calculate purchase date
     warranty_end_patterns = [
+      # Match "Coverage End Date" or similar with flexible spacing
+      /(?:coverage\s+end\s+date|warranty\s+(?:valid\s+)?until|expires?(?:\s+on)?|valid\s+until)[:\s]*([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/i,
+      # Original patterns
       /(?:coverage end date|warranty (?:valid )?until|expires?(?:\s+on)?)[:\s]+([^\n\r]{8,30})/i,
       /(?:valid until|coverage until)[:\s]+([^\n\r]{8,30})/i
     ]

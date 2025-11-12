@@ -917,7 +917,7 @@
       </div>
       <div id="chatbot-messages" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem;">
         <div style="background: #f3f4f6; padding: 0.75rem 1rem; border-radius: 8px; max-width: 85%;">
-          <p style="margin: 0; color: #374151; font-size: 0.9rem;">Hi! I'm your warranty assistant. Ask me anything about warranty coverage, like "Is water damage covered?" or "What's covered under my iPhone warranty?"</p>
+          <p style="margin: 0; color: #374151; font-size: 0.9rem;">Ask me anything about your warranties or products!</p>
         </div>
       </div>
       <div style="border-top: 1px solid #e5e7eb; padding: 1rem; background: #f9fafb;">
@@ -980,69 +980,82 @@
   </style>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const chatbotToggle = document.getElementById('chatbot-toggle');
-      const chatbotWindow = document.getElementById('chatbot-window');
-      const chatbotClose = document.getElementById('chatbot-close');
-      const chatbotForm = document.getElementById('chatbot-form');
-      const chatbotInput = document.getElementById('chatbot-input');
-      const chatbotMessages = document.getElementById('chatbot-messages');
-
-      chatbotToggle.addEventListener('click', function() {
-        chatbotWindow.style.display = chatbotWindow.style.display === 'none' ? 'flex' : 'none';
-        if (chatbotWindow.style.display === 'flex') {
-          chatbotInput.focus();
+    (function() {
+      // Use event delegation so it works even when elements are replaced
+      document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'chatbot-toggle') {
+          const chatbotWindow = document.getElementById('chatbot-window');
+          const chatbotInput = document.getElementById('chatbot-input');
+          if (chatbotWindow) {
+            chatbotWindow.style.display = chatbotWindow.style.display === 'none' ? 'flex' : 'none';
+            if (chatbotWindow.style.display === 'flex' && chatbotInput) {
+              chatbotInput.focus();
+            }
+          }
+        }
+        
+        if (e.target && e.target.id === 'chatbot-close') {
+          const chatbotWindow = document.getElementById('chatbot-window');
+          if (chatbotWindow) {
+            chatbotWindow.style.display = 'none';
+          }
         }
       });
 
-      chatbotClose.addEventListener('click', function() {
-        chatbotWindow.style.display = 'none';
-      });
+      document.addEventListener('submit', function(e) {
+        if (e.target && e.target.id === 'chatbot-form') {
+          e.preventDefault();
+          const chatbotInput = document.getElementById('chatbot-input');
+          const chatbotMessages = document.getElementById('chatbot-messages');
+          
+          if (!chatbotInput || !chatbotMessages) return;
+          
+          const question = chatbotInput.value.trim();
+          if (!question) return;
 
-      chatbotForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const question = chatbotInput.value.trim();
-        if (!question) return;
+          addMessage(question, 'user');
+          chatbotInput.value = '';
+          const loadingId = addMessage('Thinking...', 'assistant', true);
 
-        addMessage(question, 'user');
-        chatbotInput.value = '';
-        const loadingId = addMessage('Thinking...', 'assistant', true);
-
-        try {
-          const response = await fetch('/chatbot/ask', {
+          fetch('/chatbot/ask', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
             },
             body: JSON.stringify({ question: question })
-          });
+          })
+          .then(response => response.json())
+          .then(data => {
+            removeMessage(loadingId);
 
-          const data = await response.json();
-          removeMessage(loadingId);
-
-          if (data.answer) {
-            let sourcesHtml = '';
-            if (data.sources && data.sources.length > 0) {
-              sourcesHtml = '<div class="chatbot-sources"><strong>Sources:</strong><ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem;">';
-              data.sources.forEach(source => {
-                sourcesHtml += `<li><a href="${source.url}" target="_blank">${source.title}</a></li>`;
-              });
-              sourcesHtml += '</ul></div>';
+            if (data.answer) {
+              let sourcesHtml = '';
+              if (data.sources && data.sources.length > 0) {
+                sourcesHtml = '<div class="chatbot-sources"><strong>Sources:</strong><ul style="margin: 0.5rem 0 0 0; padding-left: 1.2rem;">';
+                data.sources.forEach(source => {
+                  sourcesHtml += `<li><a href="${source.url}" target="_blank">${source.title}</a></li>`;
+                });
+                sourcesHtml += '</ul></div>';
+              }
+              addMessage(data.answer + sourcesHtml, 'assistant');
+            } else if (data.error) {
+              addMessage('Error: ' + data.error, 'assistant');
+            } else {
+              addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
             }
-            addMessage(data.answer + sourcesHtml, 'assistant');
-          } else if (data.error) {
-            addMessage('Error: ' + data.error, 'assistant');
-          } else {
-            addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
-          }
-        } catch (error) {
-          removeMessage(loadingId);
-          addMessage('Sorry, I encountered an error: ' + error.message + '. Please check your API configuration.', 'assistant');
+          })
+          .catch(error => {
+            removeMessage(loadingId);
+            addMessage('Sorry, I encountered an error: ' + error.message + '. Please check your API configuration.', 'assistant');
+          });
         }
       });
 
       function addMessage(text, type, isLoading = false) {
+        const chatbotMessages = document.getElementById('chatbot-messages');
+        if (!chatbotMessages) return null;
+        
         const messageDiv = document.createElement('div');
         const messageId = 'msg-' + Date.now() + '-' + Math.random();
         messageDiv.id = messageId;
@@ -1059,7 +1072,7 @@
           message.remove();
         }
       }
-    });
+    })();
   </script>
 </body>
 </html>

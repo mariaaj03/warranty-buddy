@@ -112,12 +112,22 @@ class DashboardController < ApplicationController
       Date.today
     end
 
-    warranty_months = if params[:warranty_length].present?
+    # Prioritize AI-extracted warranty_length_months from receipt_data over form parameter
+    # Form parameter should only be used for manual uploads (when receipt_data is nil)
+    warranty_months = if receipt_data && receipt_data[:warranty_length_months]
+      warranty_val = receipt_data[:warranty_length_months]
+      Rails.logger.info "🔍 Extracted warranty_length_months from receipt_data: #{warranty_val.inspect} (type: #{warranty_val.class})"
+      converted = warranty_val.to_i
+      converted > 0 ? converted : nil
+    elsif params[:warranty_length].present?
       months = params[:warranty_length].to_i
       months > 0 ? months : nil
     else
-      receipt_data&.dig(:warranty_length_months)
+      Rails.logger.warn "⚠️ No warranty_length_months in receipt_data. receipt_data keys: #{receipt_data&.keys&.inspect}, receipt_data: #{receipt_data.inspect}"
+      nil
     end
+    
+    Rails.logger.info "🔍 Final warranty_months value before default: #{warranty_months.inspect}"
     
     return_policy_days = receipt_data&.dig(:return_policy_days)
     return_deadline = receipt_data&.dig(:return_deadline)
@@ -140,8 +150,12 @@ class DashboardController < ApplicationController
       end
     end
     
-    # Only default to 12 months for receipt uploads, not manual uploads
-    warranty_months ||= 12 if receipt_data.present?
+    if warranty_months.nil? && receipt_data.present?
+      Rails.logger.warn "⚠️ Defaulting warranty_months to 12 (receipt_data present but warranty_months is nil)"
+      warranty_months = 12
+    else
+      Rails.logger.info "✅ Using warranty_months: #{warranty_months.inspect}"
+    end
 
     current_user.products.create!(
       product_name: product_name,
