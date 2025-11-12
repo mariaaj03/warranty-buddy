@@ -22,17 +22,19 @@ Feature: Warranty Buddy Dashboard
     And I should see "No warranties yet." message
 
   # USER STORY 2: Gmail OAuth connection
-  Scenario: User connects Gmail account
-    As a user
-    I want to connect my Gmail account
-    So that I can automatically parse warranty information from my receipts
-    When I click "Connect Gmail"
-    Then I should be redirected to Google OAuth
-    When I successfully authenticate with Google
-    Then I should be redirected back to the dashboard
-    And I should see "Connected" status for Gmail
-    And I should see a "Disconnect Gmail" button
-    And I should see a "Parse Gmail Receipts" button
+
+Scenario: User connects Gmail account
+  As a user
+  I want to connect my Gmail account
+  So that I can automatically parse warranty information from my receipts
+  Given I have not connected my Gmail account    
+  When I click "Connect Gmail"
+  Then I should be redirected to Google OAuth
+  When I successfully authenticate with Google
+  Then I should be redirected back to the dashboard
+  And I should see "Connected" status for Gmail
+  And I should see a "Disconnect Gmail" button
+  And I should see a "Parse Gmail Receipts" button
 
   # USER STORY 3: Gmail disconnection
   Scenario: User disconnects Gmail account
@@ -336,16 +338,16 @@ Feature: Warranty Buddy Dashboard
     And I should see "Test Store" in the response
 
   # USER STORY 26: User cannot access warranties without Gmail connection
-  Scenario: User tries to add warranty without Gmail connection
-    As a user
-    I want appropriate restrictions when not connected
-    So I understand what features require Gmail
-    Given I have not connected my Gmail account
-    When I expand "Add a product warranty" section
-    And I fill in "Product" with "Test Product"
-    And I click "Add warranty"
-    Then I should see an error message about connecting Gmail first
-    And the warranty should not be created
+Scenario: User tries to add warranty without Gmail connection
+  As a user
+  I want to be able to add warranties manually even without Gmail
+  So I can track warranties from any source
+  Given I have not connected my Gmail account
+  When I expand "Add a product warranty" section
+  And I fill in "Product" with "Test Product"
+  And I click "Add warranty"
+  Then I should see "Warranty added successfully!"
+  And I should see "Test Product" in the warranties table
 
   # USER STORY 27: Comprehensive warranty management flow
   Scenario: User completes full warranty management workflow
