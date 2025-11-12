@@ -189,3 +189,9 @@ brew services start postgresql@14  # macOS
 **API key errors?**
 - Check keys in `rails credentials:show`
 - Restart server after changes
+
+## Receipts
+Here are some receipts you can manually upload.
+
+  <img width="1059" height="710" alt="PNG image" src="https://github.com/user-attachments/assets/46d01655-0186-45cc-becb-63cb378e5b14" />
+
