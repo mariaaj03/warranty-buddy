@@ -58,7 +58,7 @@ Feature: Google OAuth Integration
     I want to disconnect my Gmail account
     So that I can revoke access when needed
     Given I have connected my Gmail account
-    When I click "Disconnect Gmail"
+    When I click "Disconnect Gmail" for OAuth
     Then I should see "Not Connected" status for Gmail
     And I should see a "Connect Gmail" button
     And I should not see "Parse Gmail Receipts" button

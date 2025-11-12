@@ -6,6 +6,11 @@ Rails.application.routes.draw do
     omniauth_callbacks: "users/omniauth_callbacks"
   }
   
+  # Wrap the OAuth failure route in devise_scope
+  devise_scope :user do
+    get "/users/auth/failure", to: "users/omniauth_callbacks#failure"
+  end
+  
   # Dashboard routes (require authentication)
   get "dashboard", to: "dashboard#index", as: :dashboard
 
