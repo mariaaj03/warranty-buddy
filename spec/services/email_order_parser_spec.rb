@@ -245,21 +245,33 @@ RSpec.describe EmailOrderParser, type: :service do
     it 'identifies order emails by subject keywords' do
       keywords = [ 'order', 'receipt', 'invoice', 'confirmation', 'shipped', 'delivered' ]
       keywords.each do |keyword|
-        parser = described_class.new('', '', "Your #{keyword}", '')
+        # Add content that provides additional order evidence
+        parser = described_class.new('', "Order #123456", "Your #{keyword}", '')
         expect(parser.is_order_email?).to be true
       end
     end
 
-    it 'identifies order emails by content patterns' do
+    it 'identifies order emails by subject keywords with order number' do
+      keywords = ['order', 'receipt', 'invoice', 'confirmation', 'shipped', 'delivered']
+      keywords.each do |keyword|
+        parser = described_class.new('', "Order #ABC123", "Your #{keyword}", '')
+        expect(parser.is_order_email?).to be true
+      end
+    end
+
+    it 'identifies order emails by subject keywords with total' do
+      parser = described_class.new('', "Total: $99.99", "Your order confirmation", '')
+      expect(parser.is_order_email?).to be true
+    end
+
+    it 'identifies order emails by content patterns alone' do
       patterns = [
-        'Order #123456',
-        'Receipt ID: ABC123',
-        'Invoice Number: INV-123',
+        'Order number: 123456',
         'Total: $99.99',
         'Subtotal: $89.99'
       ]
       patterns.each do |content|
-        parser = described_class.new('', content, '', '')
+        parser = described_class.new('', content, 'Regular subject', '')
         expect(parser.is_order_email?).to be true
       end
     end

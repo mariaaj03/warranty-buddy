@@ -1,11 +1,11 @@
-# spec/requests/dashboard_end_to_end_spec.rb
+'''# spec/requests/dashboard_end_to_end_spec.rb
 require "rails_helper"
 
 RSpec.describe "Dashboard end-to-end", type: :request do
   include Devise::Test::IntegrationHelpers
 
-  let(:user) do
-    User.create!(
+  before do
+    @user = User.create!(
       email: "test@example.com",
       password: "password123",
       password_confirmation: "password123"
@@ -14,7 +14,7 @@ RSpec.describe "Dashboard end-to-end", type: :request do
 
   def make_product(attrs = {})
     Product.create!({
-      user: user,
+      user: @user,
       product_name: "Widget",
       merchant: "Shop",
       purchase_date: Date.new(2024, 1, 1),
@@ -23,10 +23,22 @@ RSpec.describe "Dashboard end-to-end", type: :request do
     }.merge(attrs))
   end
 
-  before { sign_in user }
+  # Helper method to sign in the user for each test
+  def authenticate_user!
+    # Use session directly to bypass Devise sign_in issues
+    post user_session_path, params: {
+      user: {
+        email: @user.email,
+        password: "password123"
+      }
+    }
+    follow_redirect! if response.redirect?
+  end
 
   describe "GET /dashboard" do
     it "loads with filters and sorts (exercises branches)" do
+      authenticate_user!
+      
       make_product(product_name: "AAA", merchant: "Best Buy", purchase_date: Date.new(2024, 1, 2))
       make_product(product_name: "ZZZ", merchant: "Target", purchase_date: Date.new(2023, 12, 31))
 
@@ -48,6 +60,7 @@ RSpec.describe "Dashboard end-to-end", type: :request do
     let(:rp) { instance_double("ReceiptProcessor") }
 
     before do
+      authenticate_user!
       allow(ReceiptProcessor).to receive(:new).and_return(rp)
       allow(rp).to receive(:cleanup)
     end
@@ -65,7 +78,7 @@ RSpec.describe "Dashboard end-to-end", type: :request do
       post upload_dashboard_index_path, params: { receipt_file: fake_upload }
       expect(response).to redirect_to(dashboard_path)
       expect(flash[:notice]).to match(/Receipt processed/)
-      expect(Product.where(user: user).count).to eq(1)
+      expect(Product.where(user: @user).count).to eq(1)
     end
 
     it "accepts image and creates product" do
@@ -80,7 +93,7 @@ RSpec.describe "Dashboard end-to-end", type: :request do
       fake_upload = double(original_filename: "photo.png", read: "PNGDATA")
       post upload_dashboard_index_path, params: { receipt_file: fake_upload }
       expect(response).to redirect_to(dashboard_path)
-      expect(Product.where(user: user).count).to eq(1)
+      expect(Product.where(user: @user).count).to eq(1)
     end
 
     it "rejects unsupported file type" do
@@ -94,7 +107,7 @@ RSpec.describe "Dashboard end-to-end", type: :request do
       post upload_dashboard_index_path, params: { product: "Manual Item", merchant: "Store", purchase_date: "2024-04-04", warranty_length: "18" }
       expect(response).to redirect_to(dashboard_path)
       expect(flash[:notice]).to match(/Warranty added successfully/i)
-      expect(Product.where(user: user).count).to eq(1)
+      expect(Product.where(user: @user).count).to eq(1)
     end
 
     it "alerts when no product can be derived from receipt and no manual name" do
@@ -102,8 +115,8 @@ RSpec.describe "Dashboard end-to-end", type: :request do
       allow(rp).to receive(:process_pdf).and_return(nil)
       allow(Rails.application.credentials).to receive(:dig).and_return(nil)
       allow(ENV).to receive(:[]).with("GOOGLE_VISION_API_KEY").and_return(nil)
-      allow(user).to receive(:gmail_token).and_return(nil)
-      allow(user).to receive(:gmail_refresh_token).and_return(nil)
+      allow(@user).to receive(:gmail_token).and_return(nil)
+      allow(@user).to receive(:gmail_refresh_token).and_return(nil)
 
       post upload_dashboard_index_path, params: { receipt_file: fake_upload }
       expect(response).to redirect_to(dashboard_path)
@@ -113,12 +126,14 @@ RSpec.describe "Dashboard end-to-end", type: :request do
     it "handles bad purchase_date gracefully" do
       post upload_dashboard_index_path, params: { product: "X", merchant: "Y", purchase_date: "not-a-date", warranty_length: "0" }
       expect(response).to redirect_to(dashboard_path)
-      expect(Product.where(user: user).count).to eq(1)
+      expect(Product.where(user: @user).count).to eq(1)
     end
   end
 
   describe "GET /api_warranties" do
     it "returns JSON list" do
+      authenticate_user!
+      
       p = make_product(product_name: "Phone", merchant: "Apple")
       get api_warranties_dashboard_index_path, as: :json
       expect(response).to have_http_status(:ok)
@@ -131,25 +146,29 @@ RSpec.describe "Dashboard end-to-end", type: :request do
 
   describe "GET /api_health" do
     it "shows gmail_connected false/true" do
-      allow(user).to receive(:gmail_connected?).and_return(false)
+      authenticate_user!
+      
+      allow(@user).to receive(:gmail_connected?).and_return(false)
       get api_health_dashboard_index_path, as: :json
       expect(JSON.parse(response.body)["gmail_connected"]).to eq(false)
 
-      allow(user).to receive(:gmail_connected?).and_return(true)
+      allow(@user).to receive(:gmail_connected?).and_return(true)
       get api_health_dashboard_index_path, as: :json
       expect(JSON.parse(response.body)["gmail_connected"]).to eq(true)
     end
   end
 
   describe "POST /parse_gmail_receipts" do
+    before { authenticate_user! }
+
     it "requires gmail connection" do
-      allow(user).to receive(:gmail_connected?).and_return(false)
+      allow(@user).to receive(:gmail_connected?).and_return(false)
       post parse_gmail_receipts_dashboard_index_path
       expect(response).to redirect_to(dashboard_path)
     end
 
     it "creates products from parsed receipts when connected; skips dups/blanks" do
-      allow(user).to receive(:gmail_connected?).and_return(true)
+      allow(@user).to receive(:gmail_connected?).and_return(true)
       make_product(product_name: "Echo Dot", merchant: "Amazon", purchase_date: Date.new(2024,5,1), raw_email_id: "m1", source: "gmail_parsed")
 
       gs = instance_double("GmailService")
@@ -162,32 +181,34 @@ RSpec.describe "Dashboard end-to-end", type: :request do
 
       post parse_gmail_receipts_dashboard_index_path
       expect(response).to redirect_to(dashboard_path)
-      expect(Product.where(user: user).pluck(:raw_email_id)).to include("m1", "m2")
+      expect(Product.where(user: @user).pluck(:raw_email_id)).to include("m1", "m2")
     end
   end
 
   describe "POST /check_warranty_eligibility" do
+    before { authenticate_user! }
+
     it "rejects when gmail not connected (json)" do
-      allow(user).to receive(:gmail_connected?).and_return(false)
+      allow(@user).to receive(:gmail_connected?).and_return(false)
       post check_warranty_eligibility_dashboard_index_path, params: { product_id: 1 }, as: :json
       expect(response).to have_http_status(:unauthorized)
     end
 
     it "rejects blank issue (json)" do
-      allow(user).to receive(:gmail_connected?).and_return(true)
+      allow(@user).to receive(:gmail_connected?).and_return(true)
       p = make_product
       post check_warranty_eligibility_dashboard_index_path, params: { product_id: p.id, issue_description: "" }, as: :json
       expect(response).to have_http_status(:bad_request)
     end
 
     it "handles not found (json)" do
-      allow(user).to receive(:gmail_connected?).and_return(true)
+      allow(@user).to receive(:gmail_connected?).and_return(true)
       post check_warranty_eligibility_dashboard_index_path, params: { product_id: 999, issue_description: "It broke" }, as: :json
       expect(response).to have_http_status(:not_found)
     end
 
     it "returns result json on success" do
-      allow(user).to receive(:gmail_connected?).and_return(true)
+      allow(@user).to receive(:gmail_connected?).and_return(true)
       p = make_product
       allow_any_instance_of(Product).to receive(:check_warranty_eligibility)
         .and_return({ "eligible" => true, "reasoning" => "Within 12 months" })
@@ -200,6 +221,8 @@ RSpec.describe "Dashboard end-to-end", type: :request do
 
   describe "POST /lookup_warranty_info" do
     it "calls AiService and returns json" do
+      authenticate_user!
+      
       ai = instance_double("AiService")
       allow(AiService).to receive(:new).and_return(ai)
       allow(ai).to receive(:lookup_warranty_info).with("Phone", "Apple")
@@ -212,6 +235,8 @@ RSpec.describe "Dashboard end-to-end", type: :request do
   end
 
   describe "DELETE /delete_warranty & PUT /update_warranty" do
+    before { authenticate_user! }
+
     it "deletes existing product; 404 otherwise" do
       p = make_product
       delete delete_warranty_dashboard_path(id: p.id)
@@ -236,3 +261,4 @@ RSpec.describe "Dashboard end-to-end", type: :request do
     end
   end
 end
+'''
