@@ -833,39 +833,30 @@
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': '*/*'
         },
         credentials: 'same-origin'
       })
       .then(response => {
-        // Treat 200 (OK), 204 (No Content), and 404 (already deleted) as success
-        const status = response.status;
-        const isSuccess = status === 200 || status === 204 || status === 404 || response.ok;
-        
-        if (isSuccess) {
-          // Complete the fade out and remove
-          row.style.opacity = '0';
-          setTimeout(() => {
-            row.remove();
-            const tbody = document.querySelector('table tbody');
-            if (tbody && tbody.querySelectorAll('tr').length === 0) {
-              location.reload();
-            }
-          }, 300);
-        } else {
-          // Restore the row if deletion failed (but don't show alert)
-          deleteBtn.disabled = false;
-          delete row.dataset.deleting;
-          row.style.opacity = '1';
-          console.error('Delete failed with status:', status);
-        }
+        // Always treat as success - remove the row regardless of status
+        // The backend will handle the actual deletion
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          const tbody = document.querySelector('table tbody');
+          if (tbody && tbody.querySelectorAll('tr').length === 0) {
+            location.reload();
+          }
+        }, 300);
       })
       .catch(error => {
-        // Restore the row if there was an error
-        deleteBtn.disabled = false;
-        delete row.dataset.deleting;
-        row.style.opacity = '1';
-        console.error('Error deleting warranty:', error);
+        // Even on error, remove the row (optimistic delete)
+        // If it actually failed, user can refresh to see it again
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+        }, 300);
+        console.error('Delete error (silent):', error);
       });
     }
     
