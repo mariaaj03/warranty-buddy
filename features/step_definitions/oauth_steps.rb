@@ -234,7 +234,12 @@ Given("the OAuth flow is configured") do
 end
 
 When("I visit the OAuth callback URL") do
-  visit user_google_oauth2_omniauth_authorize_path
+  # Visit the callback URL directly (not the authorize path)
+  visit "/users/auth/google_oauth2/callback"
+end
+
+Then("I should be redirected to the root path") do
+  expect(current_path).to eq(root_path)
 end
 
 Then("I should see OAuth success") do
@@ -243,6 +248,41 @@ end
 
 Then("I should see OAuth failure") do
   expect_oauth_failure
+end
+
+Given("the OAuth callback will raise an exception") do
+  # Mock Rails.logger to verify error logging
+  allow(Rails.logger).to receive(:error)
+  
+  # Stub User.from_omniauth to raise an error when called
+  # This will trigger the rescue block in the controller
+  allow(User).to receive(:from_omniauth).and_raise(StandardError.new("OAuth processing error"))
+  
+  # Set up OmniAuth to provide valid auth data (so it gets to the controller)
+  # The exception will be raised when User.from_omniauth is called
+  OmniAuth.config.test_mode = true
+  OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new({
+    provider: 'google_oauth2',
+    uid: "test_uid_123",
+    info: {
+      email: "test@example.com",
+      name: "Test User",
+      image: "https://example.com/avatar.jpg"
+    },
+    credentials: {
+      token: "test_token",
+      refresh_token: "test_refresh_token"
+    }
+  })
+end
+
+Then("I should see an alert message {string}") do |alert_message|
+  # Check for flash alert message
+  expect(page).to have_content(alert_message)
+end
+
+Then("it should log an OAuth error") do
+  expect(Rails.logger).to have_received(:error).with(/OAuth error/)
 end
 
 

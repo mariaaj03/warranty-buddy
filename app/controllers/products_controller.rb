@@ -4,10 +4,10 @@ class ProductsController < ApplicationController
 
   def export
     products = current_user.products.to_a.sort_by do |p|
-        p.expiry_date || Date.new(3000, 1, 1)
-      end
+      p.expiry_date || Date.new(3000, 1, 1)
+    end
 
-      respond_to do |format|
+    respond_to do |format|
         format.csv do
           headers["Content-Disposition"] = "attachment; filename=warranties.csv"
           headers["Content-Type"]        = "text/csv"
@@ -37,55 +37,55 @@ class ProductsController < ApplicationController
           }
         end
       end
-    end
+  end
 
   def calendar
     require "icalendar"
 
     products = current_user.products.to_a
 
-        offsets = Array(params[:reminders])
-                    .map { |s| Integer(s) rescue nil }
-                    .compact
-                    .select { |n| n >= 0 }
-                    .uniq
-                    .sort
+    offsets = Array(params[:reminders])
+                .map { |s| Integer(s) rescue nil }
+                .compact
+                .select { |n| n >= 0 }
+                .uniq
+                .sort
 
-        cal = Icalendar::Calendar.new
-        cal.x_wr_calname = "Warranty Buddy – Warranties"
-        cal.prodid = "-//Warranty Buddy//Iteration 1//EN"
+    cal = Icalendar::Calendar.new
+    cal.x_wr_calname = "Warranty Buddy – Warranties"
+    cal.prodid = "-//Warranty Buddy//Iteration 1//EN"
 
-        products.each do |p|
-          next unless p.expiry_date
+    products.each do |p|
+      next unless p.expiry_date
 
-          cal.event do |e|
-            e.dtstart     = Icalendar::Values::Date.new(p.expiry_date)
-            e.dtend       = Icalendar::Values::Date.new(p.expiry_date + 1.day)
-            e.summary     = "Warranty expires: #{p.product_name}"
-            e.description = "Merchant: #{p.merchant}\nPurchase: #{p.purchase_date}\nWarranty: #{p.warranty_months} month(s)\nStatus: #{p.status}"
-            e.uid         = "warranty-expiry-#{p.id}@warranty-buddy"
-            e.transp      = "TRANSPARENT"
+      cal.event do |e|
+        e.dtstart     = Icalendar::Values::Date.new(p.expiry_date)
+        e.dtend       = Icalendar::Values::Date.new(p.expiry_date + 1.day)
+        e.summary     = "Warranty expires: #{p.product_name}"
+        e.description = "Merchant: #{p.merchant}\nPurchase: #{p.purchase_date}\nWarranty: #{p.warranty_months} month(s)\nStatus: #{p.status}"
+        e.uid         = "warranty-expiry-#{p.id}@warranty-buddy"
+        e.transp      = "TRANSPARENT"
 
-            tz = ActiveSupport::TimeZone["America/New_York"]
+        tz = ActiveSupport::TimeZone["America/New_York"]
 
-            offsets.each do |days|
-                e.alarm do |a|
-                    a.action      = "DISPLAY"
-                    a.description = "Warranty expiring soon: #{p.product_name}"
+        offsets.each do |days|
+          e.alarm do |a|
+            a.action      = "DISPLAY"
+            a.description = "Warranty expiring soon: #{p.product_name}"
 
-                    alert_day  = p.expiry_date - days
-                    alert_time = tz.local(alert_day.year, alert_day.month, alert_day.day, 9, 0, 0)
+            alert_day  = p.expiry_date - days
+            alert_time = tz.local(alert_day.year, alert_day.month, alert_day.day, 9, 0, 0)
 
-                    a.trigger = Icalendar::Values::DateTime.new(alert_time, "TZID" => "America/New_York")
-                end
-            end
+            a.trigger = Icalendar::Values::DateTime.new(alert_time, "TZID" => "America/New_York")
           end
         end
-
-        headers["Content-Type"]        = "text/calendar; charset=UTF-8"
-        headers["Content-Disposition"] = 'attachment; filename="warranty_buddy.ics"'
-        render plain: cal.to_ical
       end
+    end
+
+    headers["Content-Type"]        = "text/calendar; charset=UTF-8"
+    headers["Content-Disposition"] = 'attachment; filename="warranty_buddy.ics"'
+    render plain: cal.to_ical
+  end
 
   def export_to_google_calendar
     unless current_user.gmail_connected?

@@ -63,3 +63,13 @@ Feature: Google OAuth Integration
     And I should see a "Connect Gmail" button
     And I should not see "Parse Gmail Receipts" button
     And my Gmail data should be cleared from the session
+
+  Scenario: OAuth callback raises an exception
+    As a user
+    I want to be handled gracefully when OAuth callback fails
+    So that I can retry authentication
+    Given the OAuth callback will raise an exception
+    When I visit the OAuth callback URL
+    Then I should be redirected to the root path
+    And I should see an alert message "Authentication failed. Please try again."
+    And it should log an OAuth error

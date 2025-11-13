@@ -17,7 +17,6 @@ class GoogleVisionService
 
   def extract_text_from_image(image_data)
     unless @service.authorization || @api_key
-      Rails.logger.error "Vision API key not configured. Set GOOGLE_VISION_API_KEY environment variable or add vision_api_key to credentials."
       return nil
     end
 
@@ -55,7 +54,6 @@ class GoogleVisionService
           annotations = result.dig("responses", 0, "textAnnotations")
           return annotations&.first&.dig("description") || ""
         else
-          Rails.logger.error "Vision API error: #{response.code} - #{response.body}"
           return nil
         end
       else
@@ -67,15 +65,11 @@ class GoogleVisionService
         return response.text_annotations&.first&.description || ""
       end
     rescue => e
-      Rails.logger.error "Vision API call failed: #{e.message}"
-      Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
   end
 
   def extract_text_from_pdf(pdf_data)
-    Rails.logger.warn "PDF processing via Vision API requires Document AI or async batch operations. Falling back to basic extraction."
-    
     begin
       require "pdf-reader"
       temp_file = Tempfile.new(["receipt", ".pdf"])
@@ -93,10 +87,8 @@ class GoogleVisionService
 
       text
     rescue LoadError
-      Rails.logger.error "PDF::Reader gem not available for PDF processing"
       nil
     rescue => e
-      Rails.logger.error "PDF processing failed: #{e.message}"
       nil
     end
   end
@@ -111,13 +103,6 @@ class GoogleVisionService
       return
     end
 
-    credentials_path = Rails.application.credentials.dig(:google, :service_account_path)
-    if credentials_path && File.exist?(credentials_path)
-      @service.authorization = Google::Auth::ServiceAccountCredentials.make_creds(
-        json_key_io: File.open(credentials_path),
-        scope: "https://www.googleapis.com/auth/cloud-vision"
-      )
-    end
   end
 
   def setup_oauth_authorization
@@ -144,7 +129,6 @@ class GoogleVisionService
           gmail_refresh_token: credentials.refresh_token || @user.gmail_refresh_token
         )
       rescue => e
-        Rails.logger.error "Failed to refresh Vision API token: #{e.message}"
         return
       end
     end

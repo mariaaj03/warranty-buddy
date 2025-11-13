@@ -40,7 +40,7 @@ class GmailFetcher
           gmail_refresh_token: credentials.refresh_token || refresh_token
         )
       rescue => e
-        Rails.logger.error "Failed to refresh Gmail token: #{e.message}"
+        # Token refresh failed, continue with existing token
       end
     end
     

@@ -4,7 +4,6 @@ class DashboardController < ApplicationController
   before_action :set_gmail_status
 
   def index
-
     @search_term = params[:search]
     @status_filter = params[:status]
     @merchant_filter = params[:merchant]
@@ -60,8 +59,6 @@ class DashboardController < ApplicationController
           extraction_error = "Unsupported file type. Please upload an image (JPG, PNG) or PDF."
         end
       rescue => e
-        Rails.logger.error "Receipt processing error: #{e.message}"
-        Rails.logger.error e.backtrace.first(5).join("\n")
         extraction_error = "Error processing receipt: #{e.message}"
       ensure
         receipt_processor.cleanup
@@ -116,18 +113,14 @@ class DashboardController < ApplicationController
     # Form parameter should only be used for manual uploads (when receipt_data is nil)
     warranty_months = if receipt_data && receipt_data[:warranty_length_months]
       warranty_val = receipt_data[:warranty_length_months]
-      Rails.logger.info "🔍 Extracted warranty_length_months from receipt_data: #{warranty_val.inspect} (type: #{warranty_val.class})"
       converted = warranty_val.to_i
       converted > 0 ? converted : nil
     elsif params[:warranty_length].present?
       months = params[:warranty_length].to_i
       months > 0 ? months : nil
     else
-      Rails.logger.warn "⚠️ No warranty_length_months in receipt_data. receipt_data keys: #{receipt_data&.keys&.inspect}, receipt_data: #{receipt_data.inspect}"
       nil
     end
-    
-    Rails.logger.info "🔍 Final warranty_months value before default: #{warranty_months.inspect}"
     
     return_policy_days = receipt_data&.dig(:return_policy_days)
     return_deadline = receipt_data&.dig(:return_deadline)
@@ -145,16 +138,12 @@ class DashboardController < ApplicationController
           warranty_type ||= warranty_info["warranty_type"]
         end
       rescue => e
-        Rails.logger.error "AI warranty lookup failed: #{e.message}"
         # Continue without AI data - don't default to 12 months for manual uploads
       end
     end
     
     if warranty_months.nil? && receipt_data.present?
-      Rails.logger.warn "⚠️ Defaulting warranty_months to 12 (receipt_data present but warranty_months is nil)"
       warranty_months = 12
-    else
-      Rails.logger.info "✅ Using warranty_months: #{warranty_months.inspect}"
     end
 
     current_user.products.create!(
@@ -238,7 +227,6 @@ class DashboardController < ApplicationController
 
       redirect_to dashboard_path
     rescue => e
-      Rails.logger.error "Gmail parsing failed: #{e.message}"
       message = e.message.to_s
       if message.include?("PERMISSION_DENIED") || message.include?("SERVICE_DISABLED") || message.include?("accessNotConfigured")
         alert_msg = "Gmail API is disabled for your Google Cloud project. Please enable it here (must be owner): https://console.cloud.google.com/apis/library/gmail.googleapis.com?project=#{Rails.application.credentials.dig(:google, :project_id) || 'YOUR_PROJECT_ID'}"
@@ -312,7 +300,6 @@ class DashboardController < ApplicationController
         begin
           purchase_date = Date.parse(params[:purchase_date])
         rescue ArgumentError => e
-          Rails.logger.error "Date parsing error: #{e.message}, date: #{params[:purchase_date]}"
           head :bad_request
           return
         end

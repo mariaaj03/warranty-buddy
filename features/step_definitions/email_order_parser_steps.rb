@@ -34,14 +34,8 @@ When("I parse an email with subject {string}") do |subject|
     "orders@amazon.com"
   )
   
-  puts "DEBUG: Subject parsing - subject: #{subject}"
-  puts "DEBUG: Subject parsing - content: #{text_content}"
-  puts "DEBUG: Subject parsing - is_order_email?: #{@parser.is_order_email?}"
-  
   @is_order_email = @parser.is_order_email?
   @parsed_data = @parser.parse if @is_order_email
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 Then("the email should be accepted as an order email") do
@@ -64,19 +58,10 @@ When("I parse an email from {string}") do |from_email|
     from_email
   )
   
-  puts "DEBUG: From email: #{from_email}"
-  puts "DEBUG: Is order email?: #{@parser.is_order_email?}"
-  
   @parsed_data = @parser.parse
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 Then("the merchant should be extracted as {string}") do |expected_merchant|
-  puts "DEBUG: @parsed_data = #{@parsed_data.inspect}"
-  puts "DEBUG: Expected merchant = #{expected_merchant}"
-  puts "DEBUG: From email = #{@parser.instance_variable_get(:@from)}"
-  
   if @parsed_data.nil?
     fail "Expected parsed data but got nil. Parser may have rejected this as non-order email."
   end
@@ -95,11 +80,7 @@ When("I parse an email with meta tag site_name {string}") do |site_name|
     "orders@store.com"
   )
   
-  puts "DEBUG: Meta tag parsing - is_order_email?: #{@parser.is_order_email?}"
-  
   @parsed_data = @parser.parse
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 When("I parse an email containing {string}") do |content|
@@ -114,19 +95,10 @@ When("I parse an email containing {string}") do |content|
     "orders@store.com"
   )
   
-  puts "DEBUG: Order parsing - content: #{full_content}"
-  puts "DEBUG: Order parsing - is_order_email?: #{@parser.is_order_email?}"
-  
   @parsed_data = @parser.parse
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 Then("the order number should be extracted as {string}") do |expected_order_number|
-  puts "DEBUG: @parsed_data = #{@parsed_data.inspect}"
-  puts "DEBUG: Expected order number = #{expected_order_number}"
-  puts "DEBUG: Text content = #{@parser.instance_variable_get(:@text)}"
-  
   if @parsed_data.nil?
     fail "Expected parsed data but got nil. Parser may have rejected this as non-order email."
   end
@@ -146,24 +118,16 @@ When("I parse an email with purchase date {string}") do |date_string|
     "orders@store.com"
   )
   
-  puts "DEBUG: Date parsing - content: #{content}"
-  puts "DEBUG: Date parsing - is_order_email?: #{@parser.is_order_email?}"
-  
   @parsed_data = @parser.parse
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 Then("the purchase date should be parsed as {string}") do |expected_date|
-  puts "DEBUG: @parsed_data = #{@parsed_data.inspect}"
-  puts "DEBUG: Expected date = #{expected_date}"
-  
   if @parsed_data.nil?
     fail "Expected parsed data but got nil. Parser may have rejected this as non-order email."
   end
   
   if @parsed_data[:purchase_date].nil?
-    fail "Expected purchase_date in parsed data but got nil. Available keys: #{@parsed_data.keys}. Text content: #{@parser.instance_variable_get(:@text)}"
+    fail "Expected purchase_date in parsed data but got nil. Available keys: #{@parsed_data.keys}."
   end
   
   expect(@parsed_data[:purchase_date]).to eq(Date.parse(expected_date))
@@ -180,11 +144,7 @@ When("I parse an email with HTML product table") do |table_html|
     "orders@store.com"
   )
   
-  puts "DEBUG: Product table parsing - is_order_email?: #{@parser.is_order_email?}"
-  
   @parsed_data = @parser.parse
-  
-  puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
 Then("I should extract {int} email line items") do |expected_count|
@@ -219,8 +179,6 @@ When("I parse prices in different formats") do |table|
       "orders@store.com"  
     )
     
-    puts "DEBUG: Price parsing for #{row['input']} - is_order_email?: #{parser.is_order_email?}"
-    
     parsed_data = parser.parse
     @price_results << {
       format: row['format'],
@@ -232,12 +190,6 @@ end
 
 Then("all prices should be correctly parsed as numbers") do
   @price_results.each do |result|
-    puts "DEBUG: Full result for #{result[:input]}: #{result.inspect}"
-    
-    # Check if the price might be stored under a different key
-    parsed_data = @price_results.find { |r| r[:input] == result[:input] }
-    # You might need to check other keys like :amount, :price, :total, etc.
-    
     if result[:parsed].nil?
       fail "No price found for #{result[:input]}. This suggests the parser's extract_total_amount method isn't working or the price patterns don't match."
     end
@@ -292,8 +244,6 @@ When("I parse emails from common merchants") do |table|
       row['domain']
     )
     
-    puts "DEBUG: Merchant parsing for #{row['domain']} - is_order_email?: #{parser.is_order_email?}"
-    
     parsed_data = parser.parse
     @merchant_results << {
       domain: row['domain'],
@@ -323,4 +273,211 @@ When("I parse an email with order number in subject {string}") do |subject_line|
   )
   
   @parsed_data = @parser.parse
+end
+
+# Additional coverage scenarios
+When("I parse an email with order number and date nearby") do
+  html_content = "<html><body><p>Order #12345 placed on January 15, 2024. Thank you!</p></body></html>"
+  text_content = "Order #12345 placed on January 15, 2024. Thank you!"
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    text_content,
+    "Your Order Confirmation #12345",
+    "orders@store.com"
+  )
+  
+  @parsed_data = @parser.parse
+end
+
+Then("the purchase date should be extracted from context") do
+  expect(@parsed_data[:purchase_date]).to eq(Date.parse("2024-01-15"))
+end
+
+When("I parse an email containing {string} for merchant extraction") do |content|
+  html_content = "<html><body><p>#{content}</p></body></html>"
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    content,
+    "Your Order Confirmation #12345",
+    "orders@store.com"
+  )
+  
+  @parsed_data = @parser.parse
+end
+
+When("I parse an email with subject {string}") do |subject|
+  html_content = "<html><body><p>Your order has been processed.</p></body></html>"
+  text_content = "Your order has been processed."
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    text_content,
+    subject,
+    "orders@store.com"
+  )
+  
+  @is_order_email = @parser.is_order_email?
+  @parsed_data = @parser.parse if @is_order_email
+end
+
+When("I parse an email containing {string} with quantity") do |content|
+  html_content = "<html><body><p>#{content}</p></body></html>"
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    content,
+    "Your Order Confirmation #12345",
+    "orders@store.com"
+  )
+  
+  @parsed_data = @parser.parse
+end
+
+Then("I should extract line items with quantity") do
+  expect(@parsed_data[:line_items]).not_to be_empty
+  expect(@parsed_data[:line_items].first[:quantity]).to eq(2)
+end
+
+When("I parse an email with blank HTML") do
+  @parser = EmailOrderParser.new("", "Order confirmation", "Your Order #123", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+When("I parse an email with blank merchant name") do
+  html_content = '<html><head><meta property="og:site_name" content=""></head><body>Order</body></html>'
+  @parser = EmailOrderParser.new(html_content, "Order", "Your Order #123", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the merchant should be cleaned to empty string") do
+  # The clean_merchant_name method returns "" for blank names
+  expect(@parsed_data[:merchant]).to eq("")
+end
+
+When("I parse an email with total {string}") do |total_text|
+  html_content = "<html><body><p>Order confirmation. #{total_text}</p></body></html>"
+  text_content = "Order confirmation. #{total_text}"
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    text_content,
+    "Your Order Confirmation #12345",
+    "orders@store.com"
+  )
+  
+  @parsed_data = @parser.parse
+end
+
+Then("the total amount should be parsed as {float}") do |expected_amount|
+  expect(@parsed_data[:total_amount]).to eq(expected_amount)
+end
+
+When("I parse an email with blank price") do
+  html_content = "<html><body><p>Order confirmation. Total: </p></body></html>"
+  text_content = "Order confirmation. Total: "
+  
+  @parser = EmailOrderParser.new(
+    html_content,
+    text_content,
+    "Your Order Confirmation #12345",
+    "orders@store.com"
+  )
+  
+  @parsed_data = @parser.parse
+end
+
+Then("the price should be parsed as nil") do
+  expect(@parsed_data[:total_amount]).to be_nil
+end
+
+Given("Chronic gem is not available") do
+  # Stub the require to raise LoadError
+  allow(Rails.logger).to receive(:warn)
+  # The gem loading happens at class load time, so we can't easily test it
+  # But we can verify the code handles missing Chronic gracefully
+end
+
+Then("it should log a warning about Chronic gem") do
+  expect(Rails.logger).to have_received(:warn).with(/Chronic gem not available/)
+end
+
+When("I parse an email with date in table") do
+  html_content = """
+    <html><body>
+    <table>
+      <tr><td>Order Date</td><td>January 15, 2024</td></tr>
+      <tr><td>Item</td><td>Price</td></tr>
+      <tr><td>iPhone 15 Pro</td><td>$999.00</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @parser = EmailOrderParser.new(html_content, text_content, "Your order confirmation", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the purchase date should be extracted from table") do
+  expect(@parsed_data[:purchase_date]).to eq(Date.parse("2024-01-15"))
+end
+
+When("I parse an email containing line item without quantity {string}") do |line_item_text|
+  html_content = "<html><body><p>#{line_item_text}</p></body></html>"
+  text_content = line_item_text
+  @parser = EmailOrderParser.new(html_content, text_content, "Your order", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the line item should have default quantity 1") do
+  expect(@parsed_data[:line_items].first[:quantity]).to eq(1)
+end
+
+When("I parse an email containing line item with invalid name") do
+  # Create a line item pattern that matches but has nil name
+  html_content = "<html><body><p>2x  - $999.00</p></body></html>"
+  text_content = "2x  - $999.00"
+  @parser = EmailOrderParser.new(html_content, text_content, "Your order", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the line item should be skipped") do
+  # Line items with blank or short names should be skipped
+  expect(@parsed_data[:line_items].length).to eq(0)
+end
+
+When("I parse an email with table without quantity column") do
+  html_content = """
+    <html><body>
+    <table>
+      <tr><th>Item</th><th>Price</th></tr>
+      <tr><td>iPhone 15 Pro</td><td>$999.00</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @parser = EmailOrderParser.new(html_content, text_content, "Your order", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the line items should have default quantity 1") do
+  expect(@parsed_data[:line_items].first[:quantity]).to eq(1)
+end
+
+When("I parse an email with table without price column") do
+  html_content = """
+    <html><body>
+    <table>
+      <tr><th>Item</th><th>Qty</th></tr>
+      <tr><td>iPhone 15 Pro</td><td>1</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @parser = EmailOrderParser.new(html_content, text_content, "Your order", "orders@store.com")
+  @parsed_data = @parser.parse
+end
+
+Then("the line items should have nil price") do
+  expect(@parsed_data[:line_items].first[:price]).to be_nil
 end

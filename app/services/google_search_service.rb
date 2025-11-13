@@ -142,46 +142,11 @@ class GoogleSearchService
       end
     end
 
-    # If no specific warranty found, try to infer from product type
-    if warranty_info[:warranty_months].nil?
-      inferred_warranty = infer_warranty_from_product_type(product_name)
-      if inferred_warranty
-        warranty_info[:warranty_months] = inferred_warranty
-      end
-    end
-
     # If no return policy found, use default
     if warranty_info[:return_policy_days].nil?
       warranty_info[:return_policy_days] = 30
     end
 
     warranty_info
-  end
-
-  def infer_warranty_from_product_type(product_name)
-    product_lower = product_name.downcase
-
-    # Electronics typically have 12 months
-    if product_lower.match?(/phone|computer|laptop|tablet|headphones|speaker|camera|tv|monitor|electronic/i)
-      return 12
-    end
-
-    # Appliances typically have 12-24 months
-    if product_lower.match?(/refrigerator|washer|dryer|dishwasher|stove|oven|appliance/i)
-      return 24
-    end
-
-    # Tools typically have 12-36 months
-    if product_lower.match?(/tool|drill|saw|hammer|wrench/i)
-      return 24
-    end
-
-    # Clothing typically has 30-90 days
-    if product_lower.match?(/shirt|pants|dress|shoes|clothing|apparel/i)
-      return 1 # 1 month for clothing
-    end
-
-    # Default to 12 months
-    12
   end
 end

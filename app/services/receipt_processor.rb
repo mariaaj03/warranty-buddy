@@ -16,7 +16,6 @@ class ReceiptProcessor
 
       parse_receipt_text_first(text)
     rescue => e
-      Rails.logger.error "PDF processing failed: #{e.message}"
       nil
     end
   end
@@ -31,35 +30,22 @@ class ReceiptProcessor
       
       ai_result = nil
       begin
-        Rails.logger.info "🤖 Using AI to extract receipt information from image..."
-        ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
+          ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
       rescue => ai_error
-        Rails.logger.warn "AI extraction failed: #{ai_error.message}"
       end
       
       if text.blank?
         if ai_result && ai_result["is_receipt"] == true
-          Rails.logger.info "✅ AI extracted receipt from image: #{ai_result['product_name']} from #{ai_result['merchant']}"
           return format_ai_result(ai_result)
         end
-        Rails.logger.warn "Vision API key configured: #{@vision_service.instance_variable_get(:@api_key).present?}"
-        Rails.logger.warn "OAuth configured: #{@vision_service.instance_variable_get(:@user).present?}"
         return nil
       end
 
-      Rails.logger.info "Extracted #{text.length} characters from image"
-      Rails.logger.debug "First 500 chars of extracted text: #{text[0..500]}"
-      
       regex_result = parse_receipt_text_first(text)
       
       if ai_result && ai_result["is_receipt"] == true
-        Rails.logger.info "✅ AI extracted receipt: #{ai_result['product_name']} from #{ai_result['merchant']}"
-        
         if regex_result && regex_result[:line_items]&.any? && regex_result[:product_name].present?
-          Rails.logger.info "✅ Regex also found: #{regex_result[:product_name]}"
-          
           if is_valid_product_name(ai_result["product_name"]) && !is_valid_product_name(regex_result[:product_name])
-            Rails.logger.info "Using AI result (better product name)"
             return format_ai_result(ai_result)
           end
         end
@@ -67,34 +53,19 @@ class ReceiptProcessor
         return format_ai_result(ai_result)
       end
       
-      if regex_result
-        Rails.logger.info "✅ Parsed receipt data: merchant=#{regex_result[:merchant]}, product=#{regex_result[:product_name]}, items=#{regex_result[:line_items]&.length || 0}"
-      else
-        Rails.logger.warn "⚠️ Receipt parsing returned nil - text was extracted but couldn't parse structure"
-        Rails.logger.debug "Full extracted text: #{text[0..1000]}"
-      end
-      
       regex_result
     rescue => e
-      Rails.logger.error "Image OCR processing failed: #{e.message}"
-      
       if e.message.include?("PERMISSION_DENIED") || e.message.include?("insufficient authentication scopes")
-        Rails.logger.warn "⚠️ Vision API permission denied - trying AI extraction..."
-        
         begin
           image_base64 = Base64.strict_encode64(image_data)
           ai_result = @ai_service.extract_receipt_info_from_image(image_base64)
           
           if ai_result && ai_result["is_receipt"] == true
-            Rails.logger.info "✅ AI fallback succeeded: #{ai_result['product_name']} from #{ai_result['merchant']}"
             return format_ai_result(ai_result)
           end
         rescue => ai_error
-          Rails.logger.warn "AI fallback also failed: #{ai_error.message}"
         end
       end
-      
-      Rails.logger.error e.backtrace.first(5).join("\n")
       nil
     end
   end
@@ -234,17 +205,14 @@ class ReceiptProcessor
     
     if result && result[:line_items]&.any?
       result[:product_name] = result[:line_items].first[:name]
-      Rails.logger.info "✅ Regex parsing succeeded: #{result[:product_name]} from #{result[:merchant]}"
       return result
     end
 
-    Rails.logger.info "🤖 Regex parsing found no line items, trying AI extraction..."
     begin
       ai_result = @ai_service.extract_receipt_info(text)
       
       if ai_result && ai_result["is_receipt"] == true
         product_name = ai_result["product_name"]
-        Rails.logger.info "✅ AI extraction succeeded: #{product_name} from #{ai_result['merchant']}"
         {
           product_name: product_name,
           merchant: ai_result["merchant"] || result&.dig(:merchant),
@@ -258,12 +226,9 @@ class ReceiptProcessor
           return_deadline: parse_date_string(ai_result["return_deadline"])
         }
       else
-        Rails.logger.warn "⚠️ AI did not recognize this as a receipt"
         result
       end
     rescue => e
-      Rails.logger.warn "⚠️ AI parsing failed: #{e.message}"
-      Rails.logger.warn e.backtrace.first(3).join("\n")
       result
     end
   end
@@ -307,18 +272,6 @@ class ReceiptProcessor
         cleaned = merchant_pattern.gsub(/\\s\+/, " ").gsub(/'\\?s/, "'s").gsub(/\\/, "")
         return cleaned
       end
-    end
-
-    # Look for patterns like "Thank you for shopping at [Store]"
-    if match = text.match(/thank you for shopping at\s+([^\n\r]{2,50})/i)
-      merchant = match[1].strip
-      merchant = merchant.split(',').first.strip if merchant.include?(',')
-      return merchant
-    end
-
-    # Look for patterns like "Store: [Name]"
-    if match = text.match(/store[:\s]+([^\n\r]{2,50})/i)
-      return match[1].strip
     end
 
     nil
@@ -390,12 +343,6 @@ class ReceiptProcessor
         
         if date_str.match?(/\d{1,2}:\d{2}/)
           date_str = date_str.split(/\s+\d{1,2}:\d{2}/).first
-          date_str = date_str.split(/\s+(?:AM|PM)/i).first if date_str.match?(/\s+(?:AM|PM)/i)
-        end
-        
-        if date_str.match?(/\d{4}\/\d{2}\/\d{2}/)
-          date_match = date_str.match(/(\d{4}\/\d{1,2}\/\d{1,2})/)
-          date_str = date_match[1] if date_match
         end
         
         date_str = date_str.strip
@@ -557,19 +504,10 @@ class ReceiptProcessor
     cleaned = price_string.gsub(/[^\d\.,]/, "")
     return nil if cleaned.blank?
 
-    # Handle different decimal/thousands separator formats
+    # Handle US format with thousands separator
     if cleaned.match(/^\d{1,3}(\,\d{3})+\.\d{2}$/)
       # Format: 1,234.56 (US format with thousands separator)
       cleaned = cleaned.gsub(",", "")
-    elsif cleaned.match(/^\d{1,3}(\.\d{3})+\,\d{2}$/)
-      # Format: 1.234,56 (European format)
-      cleaned = cleaned.gsub(".", "").gsub(",", ".")
-    elsif cleaned.count(",") == 1 && cleaned.count(".") == 0
-      # Format: 123,45 (European decimal)
-      cleaned = cleaned.gsub(",", ".")
-    elsif cleaned.count(".") > 1
-      # Multiple dots, assume thousands separator
-      cleaned = cleaned.gsub(".", "")
     end
 
     cleaned.to_f

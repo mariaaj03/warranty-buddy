@@ -10,10 +10,7 @@ class GmailService
     return [] unless @fetcher.service.authorization
 
     begin
-      Rails.logger.info "🔍 Starting Gmail receipt parsing for user: #{user_id}"
-
       messages = @fetcher.list_order_messages(user_id, 50)
-      Rails.logger.info "📊 Found #{messages.length} order messages"
 
       parsed_receipts = []
       processed_count = 0
@@ -21,14 +18,11 @@ class GmailService
 
       messages.each_with_index do |message, index|
         begin
-          Rails.logger.info "📧 Processing message #{index + 1}/#{messages.length} (ID: #{message.id})"
           full_message = @fetcher.get_message(message.id, user_id)
 
           subject = extract_header(full_message, "Subject") || ""
           from = extract_header(full_message, "From") || ""
           date_header = extract_header(full_message, "Date")
-
-          Rails.logger.info "📧 Subject: '#{subject}' from #{from}"
 
           html_content = @fetcher.extract_html_from_message(full_message)
           text_content = @fetcher.extract_text_from_message(full_message)
@@ -37,26 +31,21 @@ class GmailService
 
           if parsed_receipt
             receipts_found += 1
-            Rails.logger.info "✅ Parsed receipt: #{parsed_receipt[:product_name]} from #{parsed_receipt[:merchant]}"
             parsed_receipts << parsed_receipt
-          else
-            Rails.logger.info "❌ Not a valid receipt"
           end
 
           attachments = @fetcher.extract_attachments(full_message)
           if attachments.any?
-            Rails.logger.info "📎 Found #{attachments.length} attachments, processing..."
             attachment_receipts = process_attachments(attachments, full_message.id, user_id)
             parsed_receipts.concat(attachment_receipts)
             receipts_found += attachment_receipts.length
           end
 
         rescue => e
-          Rails.logger.error "💥 Failed to parse message #{message.id}: #{e.message}"
+          # Failed to parse message, continue with next
         end
       end
 
-      Rails.logger.info "🎯 Final Results: #{processed_count} messages processed, #{receipts_found} receipts found"
       parsed_receipts
     rescue => e
       Rails.logger.error "💥 Gmail API error: #{e.message}"
@@ -110,45 +99,33 @@ class GmailService
     product_name = primary_item&.dig(:name)
     
     if product_name.blank? && order_number.present?
-      Rails.logger.info "🔍 No product name found in line items for order #{order_number}, trying extraction methods..."
-      
       if product_name.blank? && subject.present?
         product_name = extract_product_name_from_subject_line(subject, order_number)
-        Rails.logger.info "📝 Subject extraction result: #{product_name.inspect}" if product_name.present?
       end
       
       if product_name.blank?
         product_name = extract_product_name_from_email_content(html_content, text_content, subject)
-        Rails.logger.info "📧 Email content extraction result: #{product_name.inspect}" if product_name.present?
       end
       
       if product_name.blank?
         email_text = [text_content, html_content].compact.join("\n")
         if email_text.present? && email_text.length > 50
-          Rails.logger.info "🤖 Trying AI extraction (Gemini API) for order #{order_number}..."
           begin
             ai_service = AiService.new
             if ai_service.instance_variable_get(:@client)
               ai_result = ai_service.extract_receipt_info(email_text[0..3000])
               if ai_result && ai_result["product_name"].present?
                 product_name = ai_result["product_name"]
-                Rails.logger.info "✅ AI (Gemini) extracted product name: #{product_name}"
-              else
-                Rails.logger.warn "⚠️ AI returned no product name"
               end
-            else
-              Rails.logger.warn "⚠️ AI service not configured (missing Gemini API key)"
             end
           rescue => e
-            Rails.logger.warn "⚠️ AI extraction failed: #{e.message}"
-            Rails.logger.warn e.backtrace.first(3).join("\n")
+            # AI extraction failed, continue with fallback
           end
         end
       end
       
       if product_name.blank?
         product_name = "Order #{order_number}"
-        Rails.logger.info "❌ Using fallback product name: #{product_name}"
       end
     end
     
@@ -182,14 +159,11 @@ class GmailService
         "walmart.com" => "Walmart",
         "target.com" => "Target",
         "costco.com" => "Costco",
-        "newegg.com" => "Newegg",
-        "bhphotovideo.com" => "B&H Photo",
         "sephora.com" => "Sephora",
         "nordstrom.com" => "Nordstrom",
         "victoriassecret.com" => "Victoria's Secret",
         "macys.com" => "Macy's",
         "ulta.com" => "Ulta",
-        "zappos.com" => "Zappos",
         "apple.com" => "Apple"
       }
       return domain_mapping[domain]
@@ -251,7 +225,6 @@ class GmailService
           next if candidate.match?(/order|receipt|invoice|total|subtotal|tax|shipping|delivery/i)
           
           if candidate.length >= 10 && candidate.length <= 80
-            Rails.logger.info "✅ Extracted product name from email: #{candidate}"
             return candidate
           end
         end
@@ -306,7 +279,6 @@ class GmailService
         candidate = candidate.gsub(/\s*for\s+your\s+.*$/i, "").strip
         
         if candidate.length >= 5 && candidate.length <= 80
-          Rails.logger.info "✅ Extracted from subject: #{candidate}"
           return candidate
         end
       end
@@ -425,10 +397,10 @@ class GmailService
         end
 
         # Process based on file type
-        if attachment[:mime_type] == "application/pdf"
-          receipt_data = @receipt_processor.process_pdf(decoded_data)
+        receipt_data = if attachment[:mime_type] == "application/pdf"
+          @receipt_processor.process_pdf(decoded_data)
         elsif attachment[:mime_type]&.start_with?("image/")
-          receipt_data = @receipt_processor.process_image(decoded_data, attachment[:filename])
+          @receipt_processor.process_image(decoded_data, attachment[:filename])
         else
           next
         end
@@ -454,7 +426,7 @@ class GmailService
         }
 
       rescue => e
-        Rails.logger.error "💥 Failed to process attachment #{attachment[:filename]}: #{e.message}"
+        # Failed to process attachment, continue with next
       end
     end
 

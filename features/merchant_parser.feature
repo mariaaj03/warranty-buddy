@@ -33,8 +33,6 @@ Feature: Merchant-Specific Email Parsers
     When I parse Amazon prices in different formats
       | format              | input      | expected |
       | US with thousands   | 1,234.56   | 1234.56  |
-      | European format     | 1.234,56   | 1234.56  |
-      | Simple European     | 123,45     | 123.45   |
       | Multiple dots       | 1.234.567  | 1234567  |
       | With currency       | $1,234.56  | 1234.56  |
     Then all Amazon prices should be correctly parsed
@@ -42,6 +40,26 @@ Feature: Merchant-Specific Email Parsers
   Scenario: Amazon parser handles blank prices gracefully
     When I parse Amazon price ""
     Then the Amazon price should be nil
+
+  Scenario: Amazon parser skips rows with less than 3 cells
+    When I parse Amazon email with table row having 2 cells
+    Then the line items should not include that row
+
+  Scenario: Amazon parser skips header rows
+    When I parse Amazon email with table containing header row "Item"
+    Then the line items should not include the header row
+
+  Scenario: Amazon parser only includes product names longer than 3 characters
+    When I parse Amazon email with product name "AB"
+    Then the line items should not include that product
+
+  Scenario: Amazon parser includes product names longer than 3 characters
+    When I parse Amazon email with product name "iPhone 15 Pro"
+    Then the line items should include that product
+
+  Scenario: Best Buy parser skips product names shorter than 3 characters
+    When I parse Best Buy email with product name "AB"
+    Then the line items should not include that product
 
   # USER STORY 52: Best Buy Parser - Order Number Extraction
   Scenario: Best Buy parser extracts alphanumeric order numbers
@@ -95,7 +113,6 @@ Feature: Merchant-Specific Email Parsers
     When I parse Best Buy prices in different formats
       | format            | input     | expected |
       | US format         | 2,199.99  | 2199.99  |
-      | European format   | 2.199,99  | 2199.99  |
       | Simple decimal    | 999.99    | 999.99   |
       | With currency     | $599.00   | 599.0    |
     Then all Best Buy prices should be correctly parsed

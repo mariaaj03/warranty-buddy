@@ -30,9 +30,6 @@ class AiService
   def extract_receipt_info(email_content)
     return nil unless @client
 
-    Rails.logger.info "🤖 AI Service: Starting receipt analysis"
-    Rails.logger.debug "📧 Email content length: #{email_content.length}"
-
     prompt = <<~PROMPT
       Analyze this email and determine if it contains purchase/receipt information for a physical product.
 
@@ -65,28 +62,20 @@ class AiService
       #{email_content[0..2000]}...
     PROMPT
 
-    Rails.logger.debug "📝 Prompt length: #{prompt.length}"
-
     response_text = call_gemini_api(prompt)
-    Rails.logger.debug "🤖 AI Response: #{response_text}"
-
+    
     # Clean up markdown code blocks if present
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     result = JSON.parse(response_text)
-    Rails.logger.info "🤖 AI Analysis Result: #{result.inspect}"
 
     # Only return data if AI confirms this is a receipt
     if result["is_receipt"] == true
-      Rails.logger.info "✅ AI confirmed this is a receipt"
       result
     else
-      Rails.logger.info "❌ AI determined this is not a receipt"
       nil
     end
   rescue => e
-    Rails.logger.error "💥 AI extraction failed: #{e.message}"
-    Rails.logger.error "💥 Backtrace: #{e.backtrace.first(5).join('\n')}"
     nil
   end
 
@@ -113,7 +102,6 @@ class AiService
 
     JSON.parse(response_text)
   rescue => e
-    Rails.logger.error "AI warranty lookup failed: #{e.message}"
     nil
   end
 
@@ -138,14 +126,11 @@ class AiService
 
     JSON.parse(response_text)
   rescue => e
-    Rails.logger.error "AI warranty eligibility check failed: #{e.message}"
     nil
   end
 
   def extract_receipt_info_from_image(image_base64)
     return nil unless @client
-
-    Rails.logger.info "🤖 AI Service: Starting image receipt analysis"
 
     prompt = <<~PROMPT
       Analyze this receipt image and extract purchase/receipt information for a physical product.
@@ -181,23 +166,17 @@ class AiService
     PROMPT
 
     response_text = call_gemini_api_with_image(prompt, image_base64)
-    Rails.logger.debug "🤖 AI Response: #{response_text}"
-
+    
     response_text = response_text.gsub(/```json\s*/, "").gsub(/```\s*$/, "").strip
 
     result = JSON.parse(response_text)
-    Rails.logger.info "🤖 AI Analysis Result: #{result.inspect}"
 
     if result["is_receipt"] == true
-      Rails.logger.info "✅ AI confirmed this is a receipt"
       result
     else
-      Rails.logger.info "❌ AI determined this is not a receipt"
       nil
     end
   rescue => e
-    Rails.logger.error "💥 AI image extraction failed: #{e.message}"
-    Rails.logger.error "💥 Backtrace: #{e.backtrace.first(5).join('\n')}"
     nil
   end
 
@@ -232,8 +211,6 @@ class AiService
     response_text = call_gemini_api(prompt)
     response_text&.strip || "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
   rescue => e
-    Rails.logger.error "AI warranty question answering failed: #{e.message}"
-    Rails.logger.error e.backtrace.first(5).join("\n")
     raise e
   end
 
@@ -275,7 +252,6 @@ class AiService
       
       max_retry_delay = 10
       if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
-        Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
         sleep(retry_delay)
         return call_gemini_api(prompt, retry_count + 1)
       end
@@ -284,16 +260,13 @@ class AiService
     else
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "API error"
-      Rails.logger.error "Gemini API error: #{response.code} - #{error_message}"
       raise "Gemini API error: #{response.code} - #{error_message}"
     end
   rescue JSON::ParserError => e
-    Rails.logger.error "Gemini API response parse error: #{e.message}"
     raise "Gemini API error: Invalid response format"
   rescue GeminiRateLimitError
     raise
   rescue => e
-    Rails.logger.error "Gemini API call failed: #{e.message}"
     raise e
   end
 
@@ -339,7 +312,6 @@ class AiService
       
       max_retry_delay = 10
       if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
-        Rails.logger.warn "Gemini API rate limit hit, retrying in #{retry_delay} seconds (attempt #{retry_count + 1}/2)"
         sleep(retry_delay)
         return call_gemini_api_with_image(prompt, image_base64, retry_count + 1)
       end
@@ -348,16 +320,13 @@ class AiService
     else
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "API error"
-      Rails.logger.error "Gemini API error: #{response.code} - #{error_message}"
       raise "Gemini API error: #{response.code} - #{error_message}"
     end
   rescue JSON::ParserError => e
-    Rails.logger.error "Gemini API response parse error: #{e.message}"
     raise "Gemini API error: Invalid response format"
   rescue GeminiRateLimitError
     raise
   rescue => e
-    Rails.logger.error "Gemini API call failed: #{e.message}"
     raise e
   end
 

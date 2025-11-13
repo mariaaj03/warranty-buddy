@@ -89,6 +89,85 @@ When("I parse a complete Amazon order email") do |html_content|
   @complete_amazon_result = MerchantParsers::AmazonParser.parse(html_content, text_content)
 end
 
+When("I parse Amazon email with table row having 2 cells") do
+  html_content = """
+    <html><body>
+    <table>
+      <tr><td>Product Name</td><td>$99.99</td></tr>
+      <tr><td>iPhone 15 Pro</td><td>1</td><td>$999.00</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @amazon_result = MerchantParsers::AmazonParser.parse(html_content, text_content)
+end
+
+Then("the line items should not include that row") do
+  # The row with 2 cells should be skipped (needs at least 3 cells)
+  # Only the row with 3 cells should be included
+  expect(@amazon_result[:line_items].length).to eq(1)
+  expect(@amazon_result[:line_items].first[:name]).to eq("iPhone 15 Pro")
+end
+
+When("I parse Amazon email with table containing header row {string}") do |header_text|
+  html_content = """
+    <html><body>
+    <table>
+      <tr><td>#{header_text}</td><td>Qty</td><td>Price</td></tr>
+      <tr><td>iPhone 15 Pro</td><td>1</td><td>$999.00</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @amazon_result = MerchantParsers::AmazonParser.parse(html_content, text_content)
+end
+
+Then("the line items should not include the header row") do
+  # Header row should be skipped
+  expect(@amazon_result[:line_items].length).to eq(1)
+  expect(@amazon_result[:line_items].first[:name]).to eq("iPhone 15 Pro")
+end
+
+When("I parse Amazon email with product name {string}") do |product_name|
+  html_content = """
+    <html><body>
+    <table>
+      <tr><td>#{product_name}</td><td>1</td><td>$99.99</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @amazon_result = MerchantParsers::AmazonParser.parse(html_content, text_content)
+end
+
+Then("the line items should not include that product") do
+  # Product name shorter than 3 characters should be skipped
+  # Check both Amazon and Best Buy results
+  if defined?(@amazon_result) && @amazon_result
+    expect(@amazon_result[:line_items].length).to eq(0)
+  elsif defined?(@bestbuy_result) && @bestbuy_result
+    expect(@bestbuy_result[:line_items].length).to eq(0)
+  end
+end
+
+Then("the line items should include that product") do
+  # Product name longer than 3 characters should be included
+  expect(@amazon_result[:line_items].length).to eq(1)
+  expect(@amazon_result[:line_items].first[:name]).to eq("iPhone 15 Pro")
+end
+
+When("I parse Best Buy email with product name {string}") do |product_name|
+  html_content = """
+    <html><body>
+    <table>
+      <tr><td>#{product_name}</td><td>$99.99</td></tr>
+    </table>
+    </body></html>
+  """
+  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
+  @bestbuy_result = MerchantParsers::BestBuyParser.parse(html_content, text_content)
+end
+
 # Amazon Assertions
 Then("the Amazon order number should be {string}") do |expected_order_number|
   expect(@amazon_result[:order_number]).to eq(expected_order_number)

@@ -107,9 +107,7 @@ class EmailOrderParser
       end
     end
 
-    # Fallback to common merchant names in text
-    common_merchants = %w[Amazon Best\s+Buy Walmart Target Costco Newegg B&H\s+Photo Apple Microsoft]
-    common_merchants.find { |merchant| @text.match?(/#{merchant}/i) }&.gsub(/\s+/, " ")
+    nil
   end
 
   def extract_order_number

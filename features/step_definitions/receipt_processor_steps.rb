@@ -428,3 +428,570 @@ Then("it should parse dates correctly") do
   expect(@formatted_result[:purchase_date]).to be_a(Date)
   expect(@formatted_result[:return_deadline]).to be_a(Date)
 end
+
+# Additional step definitions for extract_items_from_receipt coverage
+When("I extract items from receipt with email addresses") do
+  # First loop: email pattern check
+  receipt_text = "MacBook Pro 16-inch\ncontact@example.com\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip lines containing email addresses") do
+  # Email lines should be skipped in first loop, but product should still be found via second loop
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("MacBook Pro 16-inch")
+end
+
+When("I extract items from receipt with numeric-only lines") do
+  # First loop: numeric-only check
+  receipt_text = "MacBook Pro 16-inch\n12345\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip numeric-only lines") do
+  # Numeric-only lines should be skipped, product should be found via second loop
+  expect(@extracted_items).not_to be_empty
+end
+
+When("I extract items from receipt with dollar-sign lines") do
+  # First loop: dollar-sign check
+  receipt_text = "MacBook Pro 16-inch\n$\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip dollar-sign-only lines") do
+  # Dollar-sign-only lines should be skipped
+  expect(@extracted_items).not_to be_empty
+end
+
+When("I extract items from receipt with date format lines") do
+  # First loop: date format check
+  receipt_text = "MacBook Pro 16-inch\n2024-01-15\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip date format lines") do
+  # Date format lines should be skipped
+  expect(@extracted_items).not_to be_empty
+end
+
+When("I extract items from receipt with time format lines") do
+  # First loop: time format check
+  receipt_text = "MacBook Pro 16-inch\n14:30\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip time format lines") do
+  # Time format lines should be skipped
+  expect(@extracted_items).not_to be_empty
+end
+
+When("I extract items from receipt with Part Number format") do
+  receipt_text = "MacBook Pro 16-inch\nPart Number: ABC123\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should find product name before Part Number") do
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("MacBook Pro 16-inch")
+end
+
+Then("it should find price after Part Number") do
+  expect(@extracted_items.first[:price]).to eq(2499.0)
+end
+
+When("I extract items from receipt with blank lines before price") do
+  # Second loop: blank line check (prev_line.blank?)
+  # Note: blank lines are removed by .reject(&:blank?), so we need to test with actual content
+  # that gets filtered. Instead, test with lines that would be blank after processing
+  receipt_text = "MacBook Pro 16-inch\n   \n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip blank lines when searching backwards") do
+  # Blank lines should be skipped, product name should still be found
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("MacBook Pro 16-inch")
+end
+
+When("I extract items from receipt with excluded phrases before price") do
+  receipt_text = "iPhone 15 Pro\nPayment Method: Credit Card\n$999.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip lines with excluded phrases") do
+  # Lines with excluded phrases should be skipped
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("iPhone 15 Pro")
+end
+
+When("I extract items from receipt with invalid patterns before price") do
+  # Second loop: all the various pattern checks for prev_line
+  # This tests: email_pattern, /^\d+$/, /^\$/, /^\d{4}-\d{2}-\d{2}/, /\d{2}:\d{2}/, /^(part number|serial|imei|return|for support)/i
+  receipt_text = "MacBook Pro 16-inch\n12345\n2024-01-15\n14:30\ncontact@example.com\n$\nPart Number: ABC\nSerial: XYZ\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should skip invalid pattern lines") do
+  # All invalid patterns should be skipped, valid product name should be found
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("MacBook Pro 16-inch")
+end
+
+When("I extract items from receipt with valid product name before price") do
+  receipt_text = "MacBook Pro 16-inch\n$2,499.00"
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("it should extract the product name") do
+  expect(@extracted_items).not_to be_empty
+  expect(@extracted_items.first[:name]).to eq("MacBook Pro 16-inch")
+end
+
+Then("it should match it with the price") do
+  expect(@extracted_items.first[:price]).to eq(2499.0)
+end
+
+# Additional step definitions for validation and edge cases
+When("I validate product names with various inputs") do |table|
+  @validation_results = []
+  table.hashes.each do |row|
+    is_valid = @receipt_processor.send(:is_valid_product_name, row['name'])
+    @validation_results << {
+      name: row['name'],
+      expected: row['valid'] == 'true',
+      actual: is_valid
+    }
+  end
+end
+
+Then("all product name validations should be correct") do
+  @validation_results.each do |result|
+    expect(result[:actual]).to eq(result[:expected]),
+      "Expected '#{result[:name]}' to be #{result[:expected] ? 'valid' : 'invalid'}, got #{result[:actual] ? 'valid' : 'invalid'}"
+  end
+end
+
+Then("it should adjust year to {int}") do |expected_year|
+  expect(@date_result).not_to be_nil
+  expect(@date_result.year).to eq(expected_year)
+end
+
+Then("the parsed year should be {int}") do |expected_year|
+  expect(@date_result).not_to be_nil
+  expect(@date_result.year).to eq(expected_year)
+end
+
+When("I process receipt text where AI provides partial data") do
+  @receipt_text = "Best Buy\nOrder #12345\nTotal: $999.00\nPurchase Date: January 15, 2024"
+  
+  # The receipt text will be parsed by parse_receipt_text which will extract merchant, date, total, order_number
+  # But no line_items, so it will call AI extraction
+  # Mock AI result with partial data (missing merchant and purchase_date)
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .with(@receipt_text)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Product",
+      "merchant" => nil,  # Missing, should fallback to regex result
+      "purchase_date" => nil,  # Missing, should fallback to regex result
+      "warranty_length_months" => 12
+    })
+  
+  @result = @receipt_processor.send(:parse_receipt_text_first, @receipt_text)
+end
+
+Then("it should use AI merchant or fallback to regex merchant") do
+  expect(@result[:merchant]).to eq("Best Buy")  # Should use regex fallback
+end
+
+Then("it should use AI purchase date or fallback to regex date") do
+  expect(@result[:purchase_date]).to eq(Date.parse("2024-01-15"))  # Should use regex fallback
+end
+
+Then("it should use regex total amount") do
+  expect(@result[:total_amount]).to eq(999.0)
+end
+
+Then("it should use regex order number") do
+  expect(@result[:order_number]).to eq("12345")
+end
+
+When("I parse price string {string}") do |price_string|
+  @parsed_price = @receipt_processor.send(:parse_price, price_string)
+end
+
+Then("the parsed price should be nil") do
+  expect(@parsed_price).to be_nil
+end
+
+# Warranty period extraction steps
+Then("the purchase date should be calculated using warranty period") do
+  expect(@extracted_date).not_to be_nil
+  # Should calculate purchase date from warranty end date minus warranty period
+  expect(@extracted_date).to be < Date.parse("2026-01-15")
+end
+
+Then("the purchase date should be calculated using months warranty") do
+  expect(@extracted_date).not_to be_nil
+  # 24 months before January 15, 2026 = January 15, 2024
+  expect(@extracted_date).to eq(Date.parse("2024-01-15"))
+end
+
+Then("the purchase date should be calculated using year warranty") do
+  expect(@extracted_date).not_to be_nil
+  # 2 years (24 months) before January 15, 2026 = January 15, 2024
+  expect(@extracted_date).to eq(Date.parse("2024-01-15"))
+end
+
+Then("the warranty end date should be within valid range") do
+  expect(@extracted_date).not_to be_nil
+  # The warranty end date (2026-01-15) should be within Date.today - 365 to Date.today + 3650
+  # This is verified by the fact that a purchase date was calculated
+end
+
+Then("the time should be removed from the date string") do
+  expect(@extracted_date).not_to be_nil
+  # Date should be parsed correctly without time component
+  expect(@extracted_date).to eq(Date.parse("2024-01-15"))
+end
+
+# Merchant extraction pattern steps (already defined earlier, but keeping for clarity)
+
+# AI result fallback steps
+When("I process receipt text where AI provides partial data with total") do
+  @receipt_text = "Best Buy\nTotal: $999.00"
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .with(@receipt_text)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Product",
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15",
+      "warranty_length_months" => 12
+    })
+  
+  @result = @receipt_processor.send(:parse_receipt_text_first, @receipt_text)
+end
+
+Then("it should use regex total amount from fallback") do
+  expect(@result[:total_amount]).to eq(999.0)
+end
+
+When("I process receipt text where AI provides partial data with order number") do
+  @receipt_text = "Best Buy\nOrder #12345"
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .with(@receipt_text)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Product",
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15",
+      "warranty_length_months" => 12
+    })
+  
+  @result = @receipt_processor.send(:parse_receipt_text_first, @receipt_text)
+end
+
+Then("it should use regex order number from fallback") do
+  expect(@result[:order_number]).to eq("12345")
+end
+
+# Regex parsing success path
+When("I process receipt text with valid line items") do
+  @receipt_text = "Best Buy\niPhone 15 Pro\n$999.00"
+  @result = @receipt_processor.send(:parse_receipt_text_first, @receipt_text)
+end
+
+Then("it should return regex parsed result") do
+  expect(@result).not_to be_nil
+  expect(@result).to be_a(Hash)
+  expect(@result[:line_items]).not_to be_empty
+end
+
+Then("it should set product name from first line item") do
+  expect(@result[:product_name]).to eq("iPhone 15 Pro")
+end
+
+# Image extension determination steps
+When("I determine image extension for filename {string}") do |filename|
+  @extension = @receipt_processor.send(:determine_image_extension, filename)
+end
+
+Then("it should return extension {string}") do |expected_ext|
+  if expected_ext == "nil"
+    expect(@extension).to be_nil
+  else
+    expect(@extension).to eq(expected_ext)
+  end
+end
+
+# Additional step definitions for process_image coverage
+When("I process an image where AI result is not a receipt") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Best Buy iPhone 15 Pro $999.00")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => false,  # Not a receipt
+      "product_name" => "Something"
+    })
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+Then("it should use regex result instead of AI result") do
+  expect(@result).not_to be_nil
+  expect(@result[:product_name]).to eq("iPhone 15 Pro")
+  expect(@result[:merchant]).to eq("Best Buy")
+end
+
+When("I process an image where AI has valid product name and regex has invalid product name") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Receipt text with 12345 as product name")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro Max",
+      "merchant" => "Apple Store",
+      "purchase_date" => "2024-01-15"
+    })
+  
+  # Mock parse_receipt_text_first to return regex result with invalid product name
+  regex_result = {
+    line_items: [{ name: "12345", quantity: 1, price: 999.0 }],
+    product_name: "12345",
+    merchant: "Best Buy"
+  }
+  
+  allow(@receipt_processor).to receive(:parse_receipt_text_first).and_return(regex_result)
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image where regex result has no line items or product name") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Receipt text")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro",
+      "merchant" => "Apple Store",
+      "purchase_date" => "2024-01-15"
+    })
+  
+  # Mock parse_receipt_text_first to return regex result without line items or product name
+  regex_result = {
+    line_items: [],
+    merchant: "Best Buy"
+  }
+  
+  allow(@receipt_processor).to receive(:parse_receipt_text_first).and_return(regex_result)
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image where AI extraction succeeds but regex result is nil") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Receipt text")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro",
+      "merchant" => nil,
+      "purchase_date" => nil
+    })
+  
+  # Mock parse_receipt_text_first to return nil
+  allow(@receipt_processor).to receive(:parse_receipt_text_first).and_return(nil)
+  
+  # Also need to mock the internal parse_receipt_text_first call
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro",
+      "merchant" => nil,
+      "purchase_date" => nil
+    })
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image where AI extraction fails in parse_receipt_text_first") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Receipt text")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return(nil)
+  
+  # Mock parse_receipt_text_first to return regex result with no line items
+  regex_result = {
+    line_items: [],
+    merchant: "Best Buy"
+  }
+  
+  # Mock the internal parse_receipt_text call
+  allow(@receipt_processor).to receive(:parse_receipt_text).and_return(regex_result)
+  
+  # Mock AI extraction to fail
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .and_raise(StandardError.new("AI extraction failed"))
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+Then("it should use AI result instead of regex result") do
+  expect(@result).to be_a(Hash)
+  expect(@result[:product_name]).to eq("iPhone 15 Pro Max")
+end
+
+Then("it should use AI result with fallback values from nil regex result") do
+  expect(@result).to be_a(Hash)
+  expect(@result[:product_name]).to eq("iPhone 15 Pro")
+  # merchant and purchase_date should be nil since both AI and regex are nil
+end
+
+Then("it should return the regex result") do
+  expect(@result).to be_a(Hash)
+  expect(@result[:merchant]).to eq("Best Buy")
+end
+
+When("I process an image where both AI and regex find results") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Best Buy 12345 $999.00")  # Regex will extract "12345" which is invalid
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro Max",  # Valid product name
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15"
+    })
+  
+  # Mock parse_receipt_text_first to return result with invalid product name
+  allow(@receipt_processor).to receive(:parse_receipt_text_first).and_return({
+    merchant: "Best Buy",
+    line_items: [{ name: "12345", quantity: 1, price: 999.0 }],  # Invalid product name (numeric)
+    product_name: "12345"
+  })
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+Then("it should compare product names") do
+  # Both AI and regex found results, so comparison should happen
+  expect(@result).not_to be_nil
+end
+
+Then("it should use AI result if product name is better") do
+  # AI product name "iPhone 15 Pro Max" is valid, regex "12345" is invalid
+  # So it should use AI result
+  expect(@result[:product_name]).to eq("iPhone 15 Pro Max")
+end
+
+When("I process an image where regex product name is better") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Best Buy MacBook Pro 16-inch $2,499.00")
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "Total",  # Invalid product name
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15"
+    })
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image where regex has no line items") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Best Buy Order #12345")  # No line items
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Product",
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15"
+    })
+  
+  # Mock parse_receipt_text_first to return result with no line items
+  allow(@receipt_processor).to receive(:parse_receipt_text_first).and_return({
+    merchant: "Best Buy",
+    line_items: [],  # No line items
+    product_name: nil
+  })
+  
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+Then("it should use AI result") do
+  expect(@result).not_to be_nil
+  expect(@result[:product_name]).to eq("AI Product")
+end
+
+When("I process a PDF that raises an error") do
+  @pdf_data = "Mock PDF content"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_pdf)
+    .with(@pdf_data)
+    .and_raise(StandardError.new("PDF processing error"))
+  
+  @result = @receipt_processor.process_pdf(@pdf_data)
+end
+
+Then("it should return nil without raising") do
+  expect(@result).to be_nil
+end

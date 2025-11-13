@@ -100,12 +100,14 @@ end
 
 # Product Setup Steps
 Given("I have an authenticated calendar service") do
+  allow(Rails.logger).to receive(:error)
+  allow(Rails.logger).to receive(:info)
   step "I have a user with valid calendar credentials"
   step "I initialize the calendar service"
   
   # Mock the calendar service to avoid actual API calls
   @mock_calendar_api = double("CalendarService")
-  allow(@calendar_service).to receive(:instance_variable_get).with(:@service).and_return(@mock_calendar_api)
+  @calendar_service.instance_variable_set(:@service, @mock_calendar_api)
   allow(@mock_calendar_api).to receive(:authorization=)
   allow(@mock_calendar_api).to receive(:authorization).and_return(@mock_credentials)
 end
@@ -642,4 +644,111 @@ Then("the response should indicate partial vs complete failure") do
   else
     expect(@export_result[:success]).to be true  # Complete success
   end
+end
+
+# Additional step definitions for missing coverage
+Given("the Calendar API will raise insufficient scopes error") do
+  allow(Rails.logger).to receive(:error)
+  allow(Rails.logger).to receive(:info)
+  @insufficient_scope_error = StandardError.new("Request had insufficient authentication scopes")
+  @insufficient_scope_error.set_backtrace(["backtrace line 1", "backtrace line 2"])
+  @mock_event = double("Event", id: "event_123")
+  @api_call_count = 0
+  
+  allow(@mock_calendar_api).to receive(:insert_event).and_raise(@insufficient_scope_error)
+end
+
+Given("I have a product with all fields populated") do
+  @product = double("Product",
+    product_name: "Complete Product",
+    merchant: "Test Merchant",
+    purchase_date: Date.parse("2024-01-15"),
+    expiry_date: Date.parse("2025-01-15"),
+    warranty_months: 12,
+    status: "active",
+    respond_to?: true
+  )
+  @products = [@product]
+end
+
+Given("I have a product with only product name") do
+  @product = double("Product",
+    product_name: "Minimal Product",
+    merchant: nil,
+    purchase_date: nil,
+    expiry_date: Date.parse("2025-01-15"),
+    warranty_months: nil,
+    respond_to?: false
+  )
+  @products = [@product]
+end
+
+When("I export warranties to calendar with reminder days {string}") do |reminder_days|
+  days_array = reminder_days.split(',').map(&:strip).map(&:to_i)
+  
+  @mock_event = double("Event", id: "event_123")
+  @captured_events = []
+  
+  allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
+    @captured_events << event
+    @mock_event
+  end
+  
+  @export_result = @calendar_service.export_warranties(@products, reminder_days: days_array)
+  @reminder_days = days_array
+end
+
+Then("it should return a user-friendly error message") do
+  expect(@export_result[:success]).to be true
+  expect(@export_result[:errors]).to be_an(Array)
+  expect(@export_result[:errors].any? { |e| e.include?("Calendar permissions not granted") }).to be true
+end
+
+Then("it should log the error with backtrace") do
+  expect(Rails.logger).to have_received(:error).with(/Failed to create event/)
+  expect(Rails.logger).to have_received(:error).with(an_instance_of(String)) # backtrace
+end
+
+Then("the event description should include all product information") do
+  expect(@mock_calendar_api).to have_received(:insert_event) do |calendar_id, event|
+    expect(event.description).to include("Product: Complete Product")
+    expect(event.description).to include("Merchant: Test Merchant")
+    expect(event.description).to include("Purchase Date: 2024-01-15")
+    expect(event.description).to include("Warranty Length: 12 month(s)")
+    expect(event.description).to include("Status: active")
+  end
+end
+
+Then("the event description should include only product name") do
+  expect(@mock_calendar_api).to have_received(:insert_event) do |calendar_id, event|
+    expect(event.description).to include("Product: Minimal Product")
+    expect(event.description).not_to include("Merchant:")
+    expect(event.description).not_to include("Purchase Date:")
+    expect(event.description).not_to include("Warranty Length:")
+    expect(event.description).not_to include("Status:")
+  end
+end
+
+Then("it should create reminders with correct minutes") do
+  expect(@captured_events).not_to be_empty
+  event = @captured_events.first
+  expect(event.reminders).to be_present
+  expect(event.reminders.overrides).to be_present
+  
+  # Check that reminders match the expected days
+  @reminder_days.each do |days|
+    expected_minutes = days == 0 ? 0 : days * 24 * 60
+    matching_reminder = event.reminders.overrides.find { |r| r.minutes == expected_minutes }
+    expect(matching_reminder).to be_present, "Expected reminder with #{expected_minutes} minutes for #{days} days"
+  end
+end
+
+Then("the zero day reminder should have 0 minutes") do
+  expect(@captured_events).not_to be_empty
+  event = @captured_events.first
+  expect(event.reminders).to be_present
+  expect(event.reminders.overrides).to be_present
+  
+  zero_reminder = event.reminders.overrides.find { |r| r.minutes == 0 }
+  expect(zero_reminder).to be_present, "Expected reminder with 0 minutes"
 end
