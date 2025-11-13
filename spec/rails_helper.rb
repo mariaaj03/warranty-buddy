@@ -1,6 +1,4 @@
 require 'spec_helper'
-require File.expand_path('../features/simplecov_helper', __dir__)
-SimpleCov.command_name 'RSpec'
 
 ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'

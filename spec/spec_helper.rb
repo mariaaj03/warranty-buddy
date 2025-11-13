@@ -1,5 +1,7 @@
 require File.expand_path('../features/simplecov_helper', __dir__)
 SimpleCov.command_name 'RSpec'
+SimpleCov.coverage_dir 'coverage/rspec'
+
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
