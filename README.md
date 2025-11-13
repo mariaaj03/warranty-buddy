@@ -91,7 +91,6 @@ EDITOR="nano" rails credentials:edit
    - Google+ API
    - People API
    - Gemini API
-   - AI Studio API
 
 #### Step 5b: Create OAuth Credentials
 
@@ -107,9 +106,10 @@ EDITOR="nano" rails credentials:edit
    - **Authorized JavaScript origins** (add both):
      - `http://localhost:3000`
      - `https://safe-reef-46455-4dc844325c04.herokuapp.com`
-   - **Authorized redirect URIs** (add both):
+   - **Authorized redirect URIs** (add all):
      - `http://localhost:3000/users/auth/google_oauth2/callback`
      - `https://safe-reef-46455-4dc844325c04.herokuapp.com/users/auth/google_oauth2/callback`
+     - `http://127.0.0.1:3000/users/auth/google_oauth2/callback`
    - Click "Create"
    - **Copy Client ID and Client Secret**
 
@@ -154,7 +154,7 @@ Visit **http://localhost:3000**
 ## Using the App
 
 1. Sign up or sign in
-2. Click "Connect Gmail" to link your Gmail account
+2. Click "Connect Gmail" to link your Gmail account (Use personal email)
 3. Add warranties manually or upload receipt images
 4. Use "Parse Gmail Receipts" to automatically extract warranties from emails
 
@@ -162,8 +162,10 @@ Visit **http://localhost:3000**
 
 ```bash
 bundle exec rspec
+open coverage/rspec/index.html
+
 bundle exec cucumber
-open coverage/index.html  # View coverage report
+open coverage/cucumber/index.html
 ```
 
 ## Viewing the Deployed App
