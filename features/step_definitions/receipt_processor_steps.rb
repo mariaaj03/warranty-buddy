@@ -1,0 +1,408 @@
+# features/step_definitions/receipt_processor_steps.rb
+
+Given("the receipt processing system is available") do
+  @receipt_processor = ReceiptProcessor.new
+end
+
+# PDF Processing Steps
+When("I process a PDF receipt with valid content") do
+  @pdf_data = "Mock PDF content with receipt data"
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_pdf)
+    .with(@pdf_data)
+    .and_return("Best Buy Order #12345 iPhone 15 Pro $999.00 January 15, 2024")
+  
+  @result = @receipt_processor.process_pdf(@pdf_data)
+end
+
+When("I process an empty PDF") do
+  @result = @receipt_processor.process_pdf(nil)
+end
+
+Then("it should extract text from the PDF") do
+  expect(@receipt_processor.instance_variable_get(:@vision_service))
+    .to have_received(:extract_text_from_pdf)
+    .with(@pdf_data)
+end
+
+Then("it should parse the receipt data") do
+  expect(@result).not_to be_nil
+  expect(@result).to be_a(Hash)
+end
+
+Then("it should return structured warranty information") do
+  expect(@result).to have_key(:merchant)
+  expect(@result).to have_key(:purchase_date)
+  expect(@result).to have_key(:line_items)
+end
+
+# Image Processing Steps  
+When("I process an image receipt with valid content") do
+  @image_data = "mock image binary data"
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("Amazon Order Confirmation iPhone 15 Pro $999.00 Purchase Date: January 15, 2024")
+    
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image but OCR permissions are denied") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .and_raise(StandardError.new("PERMISSION_DENIED: insufficient authentication scopes"))
+    
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "iPhone 15 Pro",
+      "merchant" => "Apple Store",
+      "purchase_date" => "2024-01-15"
+    })
+    
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+When("I process an image receipt that OCR cannot read") do
+  @image_data = "mock image binary data"
+  
+  allow(@receipt_processor.instance_variable_get(:@vision_service))
+    .to receive(:extract_text_from_image)
+    .with(@image_data)
+    .and_return("")
+    
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info_from_image)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "MacBook Pro",
+      "merchant" => "Best Buy",
+      "purchase_date" => "2024-01-15"
+    })
+    
+  @result = @receipt_processor.process_image(@image_data)
+end
+
+Then("it should extract text using OCR") do
+  expect(@receipt_processor.instance_variable_get(:@vision_service))
+    .to have_received(:extract_text_from_image)
+    .with(@image_data)
+end
+
+Then("it should fall back to AI extraction") do
+  expect(@receipt_processor.instance_variable_get(:@ai_service))
+    .to have_received(:extract_receipt_info_from_image)
+end
+
+Then("it should return AI-extracted warranty information") do
+  expect(@result).not_to be_nil
+  expect(@result[:product_name]).to be_present
+  expect(@result[:merchant]).to be_present
+end
+
+Then("it should use AI extraction as fallback") do
+  expect(@receipt_processor.instance_variable_get(:@ai_service))
+    .to have_received(:extract_receipt_info_from_image)
+end
+
+# Merchant Extraction Steps
+When("I extract merchant from receipt text containing {string}") do |merchant_name|
+  @receipt_text = "Thank you for shopping! #{merchant_name} Store Receipt"
+  @extracted_merchant = @receipt_processor.send(:extract_merchant_from_receipt, @receipt_text)
+end
+
+When("I extract merchant from text {string}") do |text|
+  @extracted_merchant = @receipt_processor.send(:extract_merchant_from_receipt, text)
+end
+
+When("I extract merchant from text with no recognizable merchant") do
+  @receipt_text = "Some random store receipt with no known merchant names"
+  @extracted_merchant = @receipt_processor.send(:extract_merchant_from_receipt, @receipt_text)
+end
+
+Then("the merchant should be extracted from receipt as {string}") do |expected_merchant|
+  expect(@extracted_merchant).to eq(expected_merchant)
+end
+
+Then("the merchant from receipt should be nil") do
+  expect(@extracted_merchant).to be_nil
+end
+
+# Date Extraction Steps
+When("I extract date from receipt with {string}") do |date_text|
+  @receipt_text = "Receipt details: #{date_text}"
+  @extracted_date = @receipt_processor.send(:extract_date_from_receipt, @receipt_text)
+end
+
+When("I extract date from receipt with {string} and {string}") do |end_date_text, warranty_text|
+  @receipt_text = "Receipt: #{end_date_text}. #{warranty_text}."
+  @extracted_date = @receipt_processor.send(:extract_date_from_receipt, @receipt_text)
+end
+
+Then("the purchase date should be {string}") do |expected_date|
+  expect(@extracted_date).to eq(Date.parse(expected_date))
+end
+
+Then("the purchase date should be calculated as {string}") do |expected_date|
+  expect(@extracted_date).to eq(Date.parse(expected_date))
+end
+
+# Line Item Extraction Steps
+When("I extract items from receipt with product and price lines") do |receipt_text|
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+When("I extract items from receipt containing invalid product names") do |receipt_text|
+  @extracted_items = @receipt_processor.send(:extract_items_from_receipt, receipt_text)
+end
+
+Then("I should extract {int} line item(s)") do |expected_count|
+  expect(@extracted_items.length).to eq(expected_count)
+end
+
+Then("the first item should be {string} with price {float}") do |name, price|
+  first_item = @extracted_items.first
+  expect(first_item[:name]).to eq(name)
+  expect(first_item[:price]).to eq(price)
+end
+
+Then("the second item should be {string} with price {float}") do |name, price|
+  second_item = @extracted_items[1]
+  expect(second_item[:name]).to eq(name)
+  expect(second_item[:price]).to eq(price)
+end
+
+Then("the item should be {string}") do |name|
+  expect(@extracted_items.first[:name]).to eq(name)
+end
+
+# Total Extraction Steps
+When("I extract total from receipt with {string}") do |total_text|
+  @receipt_text = "Receipt summary: #{total_text}"
+  @extracted_total = @receipt_processor.send(:extract_total_from_receipt, @receipt_text)
+end
+
+When("I extract totals from different formats") do |table|
+  @total_results = []
+  table.hashes.each do |row|
+    total = @receipt_processor.send(:extract_total_from_receipt, row['input'])
+    @total_results << {
+      format: row['format'],
+      input: row['input'],
+      expected: row['expected'].to_f,
+      actual: total
+    }
+  end
+end
+
+Then("the total amount should be {float}") do |expected_total|
+  expect(@extracted_total).to eq(expected_total)
+end
+
+Then("all totals should be correctly extracted") do
+  @total_results.each do |result|
+    expect(result[:actual]).to eq(result[:expected]),
+      "Expected total #{result[:expected]} for #{result[:input]}, got #{result[:actual]}"
+  end
+end
+
+# Order Number Steps
+When("I extract order number from receipt with {string}") do |order_text|
+  @receipt_text = "Receipt: #{order_text}"
+  @extracted_order_number = @receipt_processor.send(:extract_order_number_from_receipt, @receipt_text)
+end
+
+Then("the order number should be {string}") do |expected_order_number|
+  expect(@extracted_order_number).to eq(expected_order_number)
+end
+
+# AI Integration Steps
+When("I process receipt text that regex cannot parse") do
+  @receipt_text = "Unstructured receipt text without clear patterns"
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .with(@receipt_text)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Extracted Product",
+      "merchant" => "AI Merchant"
+    })
+end
+
+When("AI extraction returns valid receipt data") do
+  # This is handled in the previous step
+end
+
+When("I process receipt text that both regex and AI can parse") do
+  @receipt_text = "Best Buy iPhone 15 Pro $999.00"
+  
+  allow(@receipt_processor.instance_variable_get(:@ai_service))
+    .to receive(:extract_receipt_info)
+    .with(@receipt_text)
+    .and_return({
+      "is_receipt" => true,
+      "product_name" => "AI Product Name",
+      "merchant" => "AI Merchant"
+    })
+    
+  @result = @receipt_processor.send(:parse_receipt_text_first, @receipt_text)
+end
+
+When("regex finds valid product names") do
+  # This is handled by the receipt text containing "iPhone 15 Pro"
+end
+
+When("AI also finds valid product names") do
+  # This is handled in the AI mock setup
+end
+
+Then("it should return AI-extracted information") do
+  expect(@result).to include(product_name: "AI Extracted Product")
+end
+
+Then("it should include warranty details") do
+  expect(@result).to have_key(:warranty_length_months)
+end
+
+Then("it should prefer regex results") do
+  expect(@result[:merchant]).to eq("Best Buy")
+end
+
+Then("it should return regex-extracted information") do
+  expect(@result[:product_name]).to eq("iPhone 15 Pro")
+end
+
+# Error Handling Steps
+When("I process empty receipt content") do
+  @result = @receipt_processor.send(:parse_receipt_text, "")
+end
+
+When("I process corrupted image data") do
+  # Create actual corrupted binary data instead of UTF-8 string
+  @corrupted_data = "\xFF\xFE\x00\xDE\xAD\xBE\xEF".force_encoding('BINARY')
+  
+  # Don't mock the vision service - let it try to process the corrupted data
+  @result = @receipt_processor.process_image(@corrupted_data)
+end
+
+When("I process multiple receipts") do
+  @receipt_processor.process_image("image1")
+  @receipt_processor.process_image("image2") 
+  @temp_files_created = @receipt_processor.instance_variable_get(:@temp_files).length
+end
+
+Then("it should return nil") do
+  expect(@result).to be_nil
+end
+
+Then("it should not raise any errors") do
+  expect { @result }.not_to raise_error
+end
+
+Then("it should handle the error gracefully") do
+  expect(@result).to be_nil
+end
+
+Then("it should create temporary files during processing") do
+  expect(@temp_files_created).to be > 0
+end
+
+Then("it should clean up all temporary files after processing") do
+  @receipt_processor.cleanup
+  remaining_files = @receipt_processor.instance_variable_get(:@temp_files).length
+  expect(remaining_files).to eq(0)
+end
+
+# Date Parsing Steps
+When("I parse date string {string}") do |date_string|
+  @parsed_date = @receipt_processor.send(:parse_date_string, date_string)
+end
+
+When("I parse different date string formats") do |table|
+  @date_results = []
+  table.hashes.each do |row|
+    parsed = @receipt_processor.send(:parse_date_string, row['input'])
+    @date_results << {
+      format: row['format'],
+      input: row['input'],
+      expected: Date.parse(row['expected']),
+      actual: parsed
+    }
+  end
+end
+
+Then("all dates should be correctly parsed") do
+  @date_results.each do |result|
+    expect(result[:actual]).to eq(result[:expected]),
+      "Expected date #{result[:expected]} for #{result[:input]} (#{result[:format]}), got #{result[:actual]}"
+  end
+end
+
+# Product Name Validation Steps
+When("I validate product names for quality") do |table|
+  @validation_results = []
+  table.hashes.each do |row|
+    is_valid = @receipt_processor.send(:is_valid_product_name, row['name'])
+    @validation_results << {
+      name: row['name'],
+      expected: row['valid'] == 'true',
+      actual: is_valid
+    }
+  end
+end
+
+Then("the validation results should match expected values") do
+  @validation_results.each do |result|
+    expect(result[:actual]).to eq(result[:expected]),
+      "Expected '#{result[:name]}' to be #{result[:expected] ? 'valid' : 'invalid'}, got #{result[:actual] ? 'valid' : 'invalid'}"
+  end
+end
+
+# Price Parsing Steps
+When("I parse different price formats") do |table|
+  @price_results = []
+  table.hashes.each do |row|
+    parsed = @receipt_processor.send(:parse_price, row['input'])
+    @price_results << {
+      format: row['format'],
+      input: row['input'],
+      expected: row['expected'].to_f,
+      actual: parsed
+    }
+  end
+end
+
+Then("all prices should be correctly parsed") do
+  @price_results.each do |result|
+    expect(result[:actual]).to eq(result[:expected]),
+      "Expected price #{result[:expected]} for #{result[:input]} (#{result[:format]}), got #{result[:actual]}"
+  end
+end
+
+# AI Result Formatting Steps
+When("I format AI extraction results with complete data") do |ai_data_json|
+  @ai_data = JSON.parse(ai_data_json)
+  @formatted_result = @receipt_processor.send(:format_ai_result, @ai_data)
+end
+
+Then("it should format as structured receipt data") do
+  expect(@formatted_result).to be_a(Hash)
+  expect(@formatted_result).to have_key(:product_name)
+  expect(@formatted_result).to have_key(:merchant)
+  expect(@formatted_result).to have_key(:line_items)
+end
+
+Then("it should include warranty information") do
+  expect(@formatted_result).to have_key(:warranty_length_months)
+  expect(@formatted_result).to have_key(:warranty_type)
+  expect(@formatted_result).to have_key(:return_policy_days)
+end
+
+Then("it should parse dates correctly") do
+  expect(@formatted_result[:purchase_date]).to be_a(Date)
+  expect(@formatted_result[:return_deadline]).to be_a(Date)
+end

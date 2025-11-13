@@ -5,6 +5,7 @@ require 'capybara/session'
 require 'omniauth'
 require 'omniauth/test'
 require 'database_cleaner/active_record'
+require 'rspec/mocks'
 
 Capybara.default_driver = :rack_test
 Capybara.javascript_driver = :selenium_chrome_headless
@@ -30,6 +31,14 @@ require_relative 'test_helpers'
 DatabaseCleaner.strategy = :transaction
 DatabaseCleaner.clean_with(:truncation)
 
+# Include RSpec::Mocks in the Cucumber World
+World(RSpec::Mocks::ExampleMethods)
+
+# Set up RSpec mocks for each scenario
+Before do
+  RSpec::Mocks.setup
+end
+
 Before do
   clear_oauth_mocks
   DatabaseCleaner.start
@@ -37,6 +46,8 @@ Before do
 end
 
 After do
+  RSpec::Mocks.verify
+  RSpec::Mocks.teardown
   clear_oauth_mocks
   DatabaseCleaner.clean
   Capybara.reset_sessions!
