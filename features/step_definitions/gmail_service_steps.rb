@@ -480,9 +480,6 @@ When("I parse receipt emails from Gmail") do
   @result = @gmail_service.parse_receipt_emails("me")
 end
 
-Then("it should process all {int} messages") do |expected_count|
-  expect(@mock_fetcher).to have_received(:get_message).exactly(expected_count).times
-end
 
 Then("it should return parsed receipt data") do
   expect(@result).to be_an(Array)

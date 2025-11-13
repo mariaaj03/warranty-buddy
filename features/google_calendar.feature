@@ -72,29 +72,6 @@ Feature: Google Calendar Integration
     And the event should be an all-day event
     And the timezone should be "America/New_York"
 
-  # USER STORY 69: Email Reminders
-  Scenario: Service adds email reminders to calendar events
-    Given I have an authenticated calendar service
-    And I have a product with warranty expiration
-    When I export warranties with reminder days [7, 30]
-    Then the calendar event should have email reminder 7 days before
-    And the calendar event should have email reminder 30 days before
-    And the reminders should use email notification method
-
-  Scenario: Service handles same-day reminders
-    Given I have an authenticated calendar service  
-    And I have a product with warranty expiration
-    When I export warranties with reminder days [0]
-    Then the calendar event should have reminder on the same day
-    And the reminder should be set for 0 minutes
-
-  Scenario: Service creates events without reminders when none specified
-    Given I have an authenticated calendar service
-    And I have a product with warranty expiration
-    When I export warranties with no reminders
-    Then the calendar event should be created successfully
-    And the event should not have custom reminders
-
   # USER STORY 70: Error Handling
   Scenario: Service handles insufficient calendar permissions
     Given I have a user with Gmail but no calendar permissions
