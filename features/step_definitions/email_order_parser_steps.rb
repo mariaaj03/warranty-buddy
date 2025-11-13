@@ -187,18 +187,18 @@ When("I parse an email with HTML product table") do |table_html|
   puts "DEBUG: Parsed data: #{@parsed_data.inspect}"
 end
 
-Then("I should extract {int} line items") do |expected_count|
+Then("I should extract {int} email line items") do |expected_count|
   expect(@parsed_data[:line_items].count).to eq(expected_count)
 end
 
-Then("the first item should be {string} with quantity {int} and price {float}") do |name, quantity, price|
+Then("the first email item should be {string} with quantity {int} and price {float}") do |name, quantity, price|
   first_item = @parsed_data[:line_items].first
   expect(first_item[:name]).to eq(name)
   expect(first_item[:quantity]).to eq(quantity) 
   expect(first_item[:price]).to eq(price)
 end
 
-Then("the second item should be {string} with quantity {int} and price {float}") do |name, quantity, price|
+Then("the second email item should be {string} with quantity {int} and price {float}") do |name, quantity, price|
   second_item = @parsed_data[:line_items][1]
   expect(second_item[:name]).to eq(name)
   expect(second_item[:quantity]).to eq(quantity)

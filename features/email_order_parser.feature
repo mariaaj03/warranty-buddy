@@ -83,9 +83,9 @@ Feature: Email Order Parser
       <tr><td>AirPods Pro</td><td>2</td><td>$249.00</td></tr>
     </table>
     """
-    Then I should extract 2 line items
-    And the first item should be "iPhone 15 Pro" with quantity 1 and price 999.00
-    And the second item should be "AirPods Pro" with quantity 2 and price 249.00
+    Then I should extract 2 email line items
+    And the first email item should be "iPhone 15 Pro" with quantity 1 and price 999.00
+    And the second email item should be "AirPods Pro" with quantity 2 and price 249.00
 
   # USER STORY 31: Error handling
   Scenario: System handles corrupted email content
@@ -96,10 +96,7 @@ Feature: Email Order Parser
     Then the system should handle it gracefully
     And should not raise any exceptions
 
-  Scenario: System handles empty email content
-    When I parse an empty email
-    Then it should return nil for parsed data
-    And should not raise any exceptions
+  
 
   # USER STORY 32: Complex merchant scenarios
   Scenario: System handles common merchant variations

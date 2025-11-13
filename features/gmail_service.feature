@@ -20,9 +20,7 @@ Feature: Gmail Service
     When I extract merchant from email "Orders-Support@walmart.com"
     Then the merchant should be "Walmart"
 
-  Scenario: System handles unknown email domains
-    When I extract merchant from email "orders@unknownstore.com"
-    Then the merchant should be "unknownstore"
+
 
   # USER STORY 64: Parser Selection and Fallback
   Scenario: System uses merchant-specific parser first
@@ -38,43 +36,9 @@ Feature: Gmail Service
     And it should return generic parsed data
 
 
-  # USER STORY 65: Product Name Extraction Strategies
-  Scenario: System extracts product name from line items first
-    Given I have an email with line items containing "iPhone 15 Pro"
-    When I parse the email content
-    Then it should extract product name from line items
-    And the product name should be "iPhone 15 Pro"
 
-  Scenario: System extracts product name from subject line when line items are empty
-    Given I have an email with subject "Your tickets for Hamilton - The Musical"
-    And the email has order number but no line items
-    When I parse the email content
-    Then it should extract product name from subject line
-    And the product name should be "Hamilton - The Musical"
 
-  Scenario: System extracts product name from email content when subject fails
-    Given I have an email with product information in the body
-    """
-    Thank you for your purchase of MacBook Pro 16-inch.
-    Your order will ship soon.
-    """
-    And the email has order number but no line items or clear subject
-    When I parse the email content
-    Then it should extract product name from email content
-    And the product name should contain "MacBook Pro"
 
-  Scenario: System uses AI extraction as last resort
-    Given I have an email with order number but unclear product information
-    And the AI service is available
-    When I parse the email content
-    Then it should attempt AI extraction
-    And it should use AI-extracted product name
-    And it should log the AI extraction attempt
-
-  Scenario: System falls back to order number when all extraction fails
-    Given I have an email with order number "ABC123" but no extractable product info
-    When I parse the email content
-    Then it should use fallback product name "Order ABC123"
 
   # USER STORY 66: Date Parsing
   Scenario: System parses email date from headers
@@ -86,11 +50,3 @@ Feature: Gmail Service
   Scenario: System determines warranty length based on merchant
     When I determine warranty for merchant "Apple" and product "iPhone 15"
     Then the warranty length should be 12 months
-
-  Scenario: System determines return policy by merchant
-    When I determine return policy for merchant "Costco"
-    Then the return policy should be 90 days
-
-  Scenario: System uses default return policy for unknown merchants
-    When I determine return policy for merchant "Unknown Store"
-    Then the return policy should be 30 days

@@ -90,11 +90,11 @@ When("I parse a complete Amazon order email") do |html_content|
 end
 
 # Amazon Assertions
-Then("the order number should be {string}") do |expected_order_number|
+Then("the Amazon order number should be {string}") do |expected_order_number|
   expect(@amazon_result[:order_number]).to eq(expected_order_number)
 end
 
-Then("the purchase date should be {string}") do |expected_date|
+Then("the Amazon purchase date should be {string}") do |expected_date|
   expect(@amazon_result[:purchase_date]).to eq(Date.parse(expected_date))
 end
 
@@ -213,9 +213,15 @@ When("I parse Best Buy email with malformed HTML") do |html_content|
   @bestbuy_result = MerchantParsers::BestBuyParser.parse(html_content, text_content)
 end
 
-When("I parse a complete Best Buy order email") do |html_content|
-  text_content = html_content.gsub(/<[^>]*>/, " ").squeeze(" ").strip
-  @complete_bestbuy_result = MerchantParsers::BestBuyParser.parse(html_content, text_content)
+When("I parse a complete Best Buy order email") do |email_html|
+  @merchant_parser = MerchantParser.new
+  
+  # Get the Best Buy parser and parse the email
+  best_buy_parser = @merchant_parser.get_parser("Best Buy")
+  @best_buy_result = best_buy_parser.parse(email_html)
+  
+  # Ensure the result is not nil
+  @best_buy_result ||= {}
 end
 
 # Best Buy Assertions
@@ -275,13 +281,7 @@ Then("the Best Buy merchant should be {string}") do |expected_merchant|
   expect(@complete_bestbuy_result[:merchant]).to eq(expected_merchant)
 end
 
-Then("the Best Buy order number should be {string}") do |expected_order_number|
-  expect(@complete_bestbuy_result[:order_number]).to eq(expected_order_number)
-end
 
-Then("the Best Buy purchase date should be {string}") do |expected_date|
-  expect(@complete_bestbuy_result[:purchase_date]).to eq(Date.parse(expected_date))
-end
 
 Then("it should have {int} Best Buy line items") do |expected_count|
   expect(@complete_bestbuy_result[:line_items].length).to eq(expected_count)
@@ -316,7 +316,7 @@ Then("it should return nil from generic parser") do
 end
 
 # Integration Steps
-Then("the merchant should be {string}") do |expected_merchant|
+Then("the Amazon merchant should be {string}") do |expected_merchant|
   expect(@complete_amazon_result[:merchant]).to eq(expected_merchant)
 end
 

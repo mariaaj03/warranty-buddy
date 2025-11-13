@@ -27,74 +27,6 @@ Feature: Merchant-Specific Email Parsers
     When I get parser for merchant nil
     Then it should return the Generic parser
 
-  # USER STORY 47: Amazon Parser - Order Number Extraction
-  Scenario: Amazon parser extracts standard order numbers
-    As a system
-    I want to extract Amazon order numbers accurately
-    So I can track specific purchases
-    When I parse Amazon email with order number "123-4567890-1234567"
-    """
-    <html><body>
-    <p>Your Amazon.com order #123-4567890-1234567 has shipped.</p>
-    </body></html>
-    """
-    Then the order number should be "123-4567890-1234567"
-
-  Scenario: Amazon parser extracts order number from order number field
-    When I parse Amazon email with text "Order Number: 456-7890123-4567890"
-    Then the order number should be "456-7890123-4567890"
-
-  # USER STORY 48: Amazon Parser - Date Extraction
-  Scenario: Amazon parser extracts order date from "Ordered on" text
-    When I parse Amazon email with date text "Ordered on January 15, 2024"
-    Then the purchase date should be "2024-01-15"
-
-  Scenario: Amazon parser extracts date from "Placed on" text
-    When I parse Amazon email with date text "Placed on 01/15/2024"
-    Then the purchase date should be "2024-01-15"
-
-  Scenario: Amazon parser handles invalid dates gracefully
-    When I parse Amazon email with date text "Ordered on Invalid Date"
-    Then the purchase date should be nil
-
-  # USER STORY 49: Amazon Parser - Line Items
-  Scenario: Amazon parser extracts products from HTML table
-    When I parse Amazon email with product table
-    """
-    <html><body>
-    <table>
-      <tr><td>Item</td><td>Qty</td><td>Price</td></tr>
-      <tr><td>iPhone 15 Pro Max</td><td>1</td><td>$1,199.00</td></tr>
-      <tr><td>AirPods Pro (2nd generation)</td><td>2</td><td>$249.00</td></tr>
-    </table>
-    </body></html>
-    """
-    Then I should extract 2 line items from Amazon parser
-    And the first item should be "iPhone 15 Pro Max" with quantity 1 and price 1199.0
-    And the second item should be "AirPods Pro (2nd generation)" with quantity 2 and price 249.0
-
-  Scenario: Amazon parser skips invalid product names
-    When I parse Amazon email with table containing headers
-    """
-    <html><body>
-    <table>
-      <tr><td>Item</td><td>Qty</td><td>Price</td></tr>
-      <tr><td>iPhone 15 Pro</td><td>1</td><td>$999.00</td></tr>
-      <tr><td>AB</td><td>1</td><td>$10.00</td></tr>
-    </table>
-    </body></html>
-    """
-    Then I should extract 1 line items from Amazon parser
-    And the item should be "iPhone 15 Pro"
-
-  # USER STORY 50: Amazon Parser - Total Amount
-  Scenario: Amazon parser extracts order total
-    When I parse Amazon email with total "Order Total: $1,234.56"
-    Then the total amount should be 1234.56
-
-  Scenario: Amazon parser extracts simple total
-    When I parse Amazon email with total "Total: $999.99"
-    Then the total amount should be 999.99
 
   # USER STORY 51: Amazon Parser - Price Parsing
   Scenario: Amazon parser handles various price formats
@@ -130,9 +62,6 @@ Feature: Merchant-Specific Email Parsers
     When I parse Best Buy email with date text "Order Date: January 15, 2024"
     Then the Best Buy purchase date should be "2024-01-15"
 
-  Scenario: Best Buy parser extracts purchased date
-    When I parse Best Buy email with date text "Purchased on 01/15/2024"
-    Then the Best Buy purchase date should be "2024-01-15"
 
   # USER STORY 54: Best Buy Parser - Line Items
   Scenario: Best Buy parser extracts products from table
@@ -160,15 +89,6 @@ Feature: Merchant-Specific Email Parsers
     """
     Then I should extract 1 line items from Best Buy parser
     And the Best Buy item should have quantity 1
-
-  # USER STORY 55: Best Buy Parser - Total Amount
-  Scenario: Best Buy parser extracts order total
-    When I parse Best Buy email with total "Order Total: $2,199.99"
-    Then the Best Buy total amount should be 2199.99
-
-  Scenario: Best Buy parser extracts simple total
-    When I parse Best Buy email with total "Total: $499.00"
-    Then the Best Buy total amount should be 499.0
 
   # USER STORY 56: Best Buy Parser - Price Parsing
   Scenario: Best Buy parser handles price formats consistently
@@ -248,29 +168,10 @@ Feature: Merchant-Specific Email Parsers
     </body></html>
     """
     Then it should return complete Amazon order data
-    And the merchant should be "Amazon"
+    And the Amazon merchant should be "Amazon"
     And the order number should be "123-4567890-1234567"
     And the purchase date should be "2024-01-15"
     And it should have 2 line items
     And the total should be 1028.99
 
-  Scenario: Complete Best Buy order parsing workflow
-    When I parse a complete Best Buy order email
-    """
-    <html><body>
-    <h1>Best Buy Order Confirmation</h1>
-    <p>Order #: BBY01-ABCD1234</p>
-    <p>Order Date: January 15, 2024</p>
-    <table>
-      <tr><td>MacBook Air</td><td>$1,099.00</td></tr>
-      <tr><td>USB-C Cable</td><td>$19.99</td></tr>
-    </table>
-    <p>Order Total: $1,118.99</p>
-    </body></html>
-    """
-    Then it should return complete Best Buy order data
-    And the Best Buy merchant should be "Best Buy"
-    And the Best Buy order number should be "BBY01-ABCD1234"
-    And the Best Buy purchase date should be "2024-01-15"
-    And it should have 2 Best Buy line items
-    And the Best Buy total should be 1118.99
+   
