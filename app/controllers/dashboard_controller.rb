@@ -146,7 +146,7 @@ class DashboardController < ApplicationController
       warranty_months = 12
     end
 
-    current_user.products.create!(
+    product = current_user.products.create!(
       product_name: product_name,
       merchant: merchant || "",
       purchase_date: purchase_date,
@@ -157,6 +157,9 @@ class DashboardController < ApplicationController
       issue_description: params[:issue_description],
       source: receipt_data ? "receipt_upload" : "manual"
     )
+
+    # Image fetching disabled - using emoji icons instead
+    # fetch_product_image_async(product)
 
     redirect_to dashboard_path, notice: receipt_data ? "Receipt processed and warranty added!" : "Warranty added successfully!"
   end
@@ -211,7 +214,7 @@ class DashboardController < ApplicationController
         next if existing_product
         next if receipt_data[:product_name].blank? || receipt_data[:purchase_date].blank?
 
-        current_user.products.create!(
+        product = current_user.products.create!(
           product_name: receipt_data[:product_name],
           merchant: receipt_data[:merchant].presence || "",
           purchase_date: receipt_data[:purchase_date] || Date.today,
@@ -222,6 +225,10 @@ class DashboardController < ApplicationController
           source: receipt_data[:source],
           raw_email_id: receipt_data[:raw_email_id]
         )
+        
+        # Image fetching disabled - using emoji icons instead
+        # fetch_product_image_async(product)
+        
         created_count += 1
       end
 
@@ -321,6 +328,43 @@ class DashboardController < ApplicationController
 
   def set_gmail_status
     @gmail_connected = current_user&.gmail_connected?
+  end
+
+  def fetch_product_image_async(product)
+    # Fetch image in background to avoid blocking the request
+    # Use a simple thread for now (could be upgraded to ActiveJob later)
+    Thread.new do
+      begin
+        Rails.logger.info "🔍 Fetching image for product: #{product.product_name} (#{product.merchant})"
+        image_service = GoogleImageSearchService.new
+        
+        # Check if API is configured
+        unless image_service.instance_variable_get(:@api_key) && image_service.instance_variable_get(:@search_engine_id)
+          Rails.logger.warn "⚠️ Google Custom Search API not configured. Skipping image fetch for #{product.product_name}"
+          next
+        end
+        
+        # Try to fetch product image first
+        image_url = image_service.search_product_image(product.product_name, product.merchant)
+        
+        # If no product image found, try merchant logo as fallback
+        if image_url.blank? && product.merchant.present?
+          Rails.logger.info "🔄 Product image not found, trying merchant logo for: #{product.merchant}"
+          image_url = image_service.search_merchant_logo(product.merchant)
+        end
+        
+        if image_url.present?
+          product.update_column(:image_url, image_url)
+          image_type = image_url.include?("logo") ? "merchant logo" : "product image"
+          Rails.logger.info "✅ Fetched #{image_type} for product: #{product.product_name} -> #{image_url}"
+        else
+          Rails.logger.warn "⚠️ No image found for product: #{product.product_name}"
+        end
+      rescue => e
+        Rails.logger.error "❌ Failed to fetch image for product #{product.id}: #{e.message}"
+        Rails.logger.error e.backtrace.first(5).join("\n")
+      end
+    end
   end
 end
 

@@ -29,28 +29,66 @@
 
     /* Header */
     .dashboard-header {
-      background: #ffffff;
-      border-bottom: 1px solid #e5e7eb;
-      padding: 1.5rem 2rem;
+      background: transparent;
+      padding: 2rem 0 1.5rem 0;
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
-      margin-bottom: 2rem;
-      border-radius: 0.5rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      margin-bottom: 3rem;
+      position: relative;
+      border-bottom: 1px solid #e5e7eb;
     }
 
     .dashboard-header .logo {
       display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 1.5rem;
+      text-align: center;
+    }
+
+    .dashboard-header .logo-main {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      font-size: 1.875rem;
       font-weight: 700;
       color: #0f172a;
+      letter-spacing: -0.025em;
+    }
+
+    .dashboard-header .logo-tagline {
+      font-size: 0.9375rem;
+      color: #6b7280;
+      font-weight: 400;
+      margin-left: 0;
+      margin-top: 0.25rem;
+      letter-spacing: 0.01em;
+    }
+
+    .dashboard-header .user-info {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
     }
 
     .logo-icon {
-      font-size: 2rem;
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+      filter: drop-shadow(0 2px 6px rgba(26, 115, 232, 0.2));
+      transition: transform 0.2s ease;
+    }
+
+    .logo-icon:hover {
+      transform: scale(1.05);
+    }
+
+    .logo-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     .user-info {
@@ -256,10 +294,39 @@
       justify-self: start;
     }
 
-    .btn-add:hover {
+    .btn-add:hover:not(:disabled) {
       background: #1557b0;
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+    }
+
+    .btn-add:disabled,
+    .btn-apply:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* Button Loading Spinner */
+    .btn-loading {
+      position: relative;
+    }
+
+    .btn-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+
+    .btn-filter.btn-apply .btn-spinner {
+      border-color: rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
     }
 
     /* Table Section */
@@ -309,6 +376,28 @@
       padding: 1rem;
       border-bottom: 1px solid #e5e7eb;
       font-size: 0.875rem;
+    }
+
+    .product-image-cell {
+      width: 60px;
+      padding-right: 0.75rem;
+    }
+
+    .product-image {
+      width: 50px;
+      height: 50px;
+      border-radius: 0.5rem;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+
+    .product-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     .warranties-table td:nth-child(4) {
@@ -380,6 +469,58 @@
     .delete-btn:hover {
       background: #fef2f2;
       color: #dc2626;
+    }
+
+    .ask-assistant-btn {
+      background: #f0f9ff;
+      color: #1a73e8;
+      position: relative;
+    }
+
+    .ask-assistant-btn:hover {
+      background: #dbeafe;
+      color: #1557b0;
+    }
+
+    /* Tooltip for Ask Assistant button */
+    .ask-assistant-btn::after {
+      content: "Ask Assistant about this warranty";
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #1a1a1a;
+      color: white;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      border-radius: 0.375rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .ask-assistant-btn::before {
+      content: "";
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 0.25rem;
+      border: 5px solid transparent;
+      border-top-color: #1a1a1a;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 1000;
+    }
+
+    .ask-assistant-btn:hover::after,
+    .ask-assistant-btn:hover::before {
+      opacity: 1;
     }
 
     .empty-state {
@@ -513,6 +654,10 @@
         padding: 0.75rem 0.5rem;
       }
     }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -520,8 +665,24 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="logo">
-        <span class="logo-icon">🧾</span>
-        <span>Warranty Buddy</span>
+        <div class="logo-main">
+          <span class="logo-icon">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#1a73e8;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#1557b0;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+              <!-- Modern rounded badge/shield -->
+              <path d="M24 4C15.2 4 8 8.8 8 14.8V24C8 32.4 15.2 40 24 44C32.8 40 40 32.4 40 24V14.8C40 8.8 32.8 4 24 4Z" fill="url(#logoGradient)"/>
+              <!-- Checkmark -->
+              <path d="M18 24L22 28L30 18" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </span>
+          <span>Warranty Buddy</span>
+        </div>
+        <div class="logo-tagline">Your digital memory for every purchase</div>
       </div>
       <div class="user-info">
         <% if user_signed_in? %>
@@ -642,9 +803,18 @@
             <% @warranties.each do |w| %>
               <tr data-warranty-id="<%= w.id %>">
                 <td>
-                  <div class="product-name"><%= w.product_name %></div>
-                  <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
-                    Purchased <%= w.purchase_date.strftime("%b %d, %Y") %> • <%= w.warranty_months %> months
+                  <div class="product-info">
+                    <div class="product-image-cell">
+                      <div class="product-image" style="font-size: 2rem; display: flex; align-items: center; justify-content: center;">
+                        <%= w.category_icon %>
+                      </div>
+                    </div>
+                    <div style="flex: 1;">
+                      <div class="product-name"><%= w.product_name %></div>
+                      <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                        Purchased <%= w.purchase_date.strftime("%b %d, %Y") %> • <%= w.warranty_months %> months
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td>
@@ -680,6 +850,13 @@
                 <td><%= w.merchant.present? ? w.merchant : "—" %></td>
                 <td>
                   <div class="action-buttons">
+                    <button type="button" class="action-btn ask-assistant-btn" 
+                            data-product-name="<%= w.product_name %>" 
+                            data-merchant="<%= w.merchant %>"
+                            data-warranty-id="<%= w.id %>"
+                            title="Ask Assistant about this warranty">
+                      🤖
+                    </button>
                     <button type="button" class="action-btn edit-btn" data-warranty-id="<%= w.id %>" title="Edit">
                       ✏️
                     </button>
@@ -751,6 +928,70 @@
 
   <script>
   (function() {
+    // Button loading state functions
+    function setButtonLoading(button, isLoading) {
+      if (!button) return;
+      
+      if (isLoading) {
+        // Don't add loading if already loading
+        if (button.classList.contains('btn-loading')) return;
+        
+        button.disabled = true;
+        button.classList.add('btn-loading');
+        // Add spinner next to text
+        const spinner = document.createElement('span');
+        spinner.className = 'btn-spinner';
+        button.appendChild(spinner);
+      } else {
+        button.disabled = false;
+        button.classList.remove('btn-loading');
+        const spinner = button.querySelector('.btn-spinner');
+        if (spinner) spinner.remove();
+      }
+    }
+
+    // Handle "Add Warranty" form submission
+    const addProductForm = document.querySelector('.add-product-form');
+    if (addProductForm) {
+      addProductForm.addEventListener('submit', function(e) {
+        // Check if form is valid before showing loading
+        if (!addProductForm.checkValidity()) {
+          // Let browser show validation messages
+          return;
+        }
+        
+        const submitButton = addProductForm.querySelector('button[type="submit"]');
+        const receiptFile = document.getElementById('receipt_file');
+        const productName = document.getElementById('product');
+        const hasReceipt = receiptFile && receiptFile.files.length > 0;
+        const hasProductName = productName && productName.value.trim().length > 0;
+        
+        // Don't show loading if neither receipt nor product name is provided
+        if (!hasReceipt && !hasProductName) {
+          return;
+        }
+        
+        // Show loading state on button
+        if (submitButton) {
+          setButtonLoading(submitButton, true);
+        }
+      });
+    }
+
+    // Handle "Parse Gmail Receipts" form submission
+    document.addEventListener('submit', function(e) {
+      const form = e.target;
+      if (form && form.action && form.action.includes('parse_gmail_receipts')) {
+        // button_to creates a form with a button inside
+        const submitButton = form.querySelector('button[type="submit"]') || 
+                            form.querySelector('input[type="submit"]') ||
+                            form.querySelector('button');
+        if (submitButton) {
+          setButtonLoading(submitButton, true);
+        }
+      }
+    });
+
     // Handle action button clicks
     document.addEventListener('click', (e) => {
       if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
@@ -977,10 +1218,79 @@
     .chatbot-sources a:hover {
       text-decoration: underline;
     }
+
+    /* Quick Action and Suggestion Buttons */
   </style>
 
   <script>
     (function() {
+      // Handle "Ask Assistant" buttons on product rows
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('ask-assistant-btn') || e.target.closest('.ask-assistant-btn')) {
+          e.preventDefault();
+          e.stopPropagation();
+          const btn = e.target.classList.contains('ask-assistant-btn') ? e.target : e.target.closest('.ask-assistant-btn');
+          const productName = btn.getAttribute('data-product-name');
+          const merchant = btn.getAttribute('data-merchant');
+          
+          // Open chatbot
+          const chatbotWindow = document.getElementById('chatbot-window');
+          const chatbotToggle = document.getElementById('chatbot-toggle');
+          if (chatbotWindow && chatbotWindow.style.display === 'none') {
+            chatbotWindow.style.display = 'flex';
+            if (chatbotToggle) chatbotToggle.style.display = 'none';
+          }
+          
+          // Set contextual question
+          setTimeout(function() {
+            const chatbotInput = document.getElementById('chatbot-input');
+            if (chatbotInput) {
+              const question = `Tell me about my ${productName} warranty${merchant ? ' from ' + merchant : ''}`;
+              chatbotInput.value = question;
+              chatbotInput.focus();
+              // Trigger form submission
+              const chatbotForm = document.getElementById('chatbot-form');
+              if (chatbotForm) {
+                const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                chatbotForm.dispatchEvent(submitEvent);
+              }
+            }
+          }, 100);
+        }
+      });
+
+      // Handle quick action buttons
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('quick-action-btn') || e.target.classList.contains('suggestion-btn')) {
+          e.preventDefault();
+          const question = e.target.getAttribute('data-question');
+          if (question) {
+            // Open chatbot if closed
+            const chatbotWindow = document.getElementById('chatbot-window');
+            const chatbotToggle = document.getElementById('chatbot-toggle');
+            if (chatbotWindow && chatbotWindow.style.display === 'none') {
+              chatbotWindow.style.display = 'flex';
+              if (chatbotToggle) chatbotToggle.style.display = 'none';
+            }
+            
+            // Set the question in the input and submit after a short delay
+            setTimeout(function() {
+              const chatbotInput = document.getElementById('chatbot-input');
+              if (chatbotInput) {
+                chatbotInput.value = question;
+                chatbotInput.focus();
+                // Trigger form submission
+                const chatbotForm = document.getElementById('chatbot-form');
+                if (chatbotForm) {
+                  const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                  chatbotForm.dispatchEvent(submitEvent);
+                }
+              }
+            }, 100);
+          }
+        }
+      });
+
       // Use event delegation so it works even when elements are replaced
       document.addEventListener('click', function(e) {
         if (e.target && e.target.id === 'chatbot-toggle') {
