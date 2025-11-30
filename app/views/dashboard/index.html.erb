@@ -1224,11 +1224,17 @@
 
   <script>
     (function() {
+      let isSubmitting = false; // Flag to prevent duplicate submissions
+      
       // Handle "Ask Assistant" buttons on product rows
       document.addEventListener('click', function(e) {
         if (e.target.classList.contains('ask-assistant-btn') || e.target.closest('.ask-assistant-btn')) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation(); // Prevent other handlers
+          
+          if (isSubmitting) return; // Already submitting, ignore
+          
           const btn = e.target.classList.contains('ask-assistant-btn') ? e.target : e.target.closest('.ask-assistant-btn');
           const productName = btn.getAttribute('data-product-name');
           const merchant = btn.getAttribute('data-merchant');
@@ -1250,7 +1256,8 @@
               chatbotInput.focus();
               // Trigger form submission
               const chatbotForm = document.getElementById('chatbot-form');
-              if (chatbotForm) {
+              if (chatbotForm && !isSubmitting) {
+                isSubmitting = true;
                 const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
                 chatbotForm.dispatchEvent(submitEvent);
               }
@@ -1315,14 +1322,24 @@
       document.addEventListener('submit', function(e) {
         if (e.target && e.target.id === 'chatbot-form') {
           e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          
+          // Prevent duplicate submissions
+          if (isSubmitting) return;
+          
           const chatbotInput = document.getElementById('chatbot-input');
           const chatbotMessages = document.getElementById('chatbot-messages');
           
           if (!chatbotInput || !chatbotMessages) return;
           
           const question = chatbotInput.value.trim();
-          if (!question) return;
+          if (!question) {
+            isSubmitting = false; // Reset if no question
+            return;
+          }
 
+          isSubmitting = true; // Set flag
           addMessage(question, 'user');
           chatbotInput.value = '';
           const loadingId = addMessage('Thinking...', 'assistant', true);
@@ -1338,6 +1355,7 @@
           .then(response => response.json())
           .then(data => {
             removeMessage(loadingId);
+            isSubmitting = false; // Reset flag after response
 
             if (data.answer) {
               let sourcesHtml = '';
@@ -1357,6 +1375,7 @@
           })
           .catch(error => {
             removeMessage(loadingId);
+            isSubmitting = false; // Reset flag on error
             addMessage('Sorry, I encountered an error: ' + error.message + '. Please check your API configuration.', 'assistant');
           });
         }
