@@ -56,6 +56,7 @@ gem "gemini-ai", "~> 4.3.0"
 
 # PDF processing for receipt uploads
 gem "pdf-reader"
+gem "mini_magick"
 
 # Calendar exports
 gem "icalendar"
