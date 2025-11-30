@@ -27,7 +27,8 @@ class DashboardController < ApplicationController
 
     case @sort_by
     when "expiry_date"
-      @warranties = @warranties.order(:purchase_date, :warranty_months)
+      # Sort by calculated expiry date: purchase_date + warranty_months
+      @warranties = @warranties.order(Arel.sql("(purchase_date + (warranty_months || ' months')::interval)"))
     when "product_name"
       @warranties = @warranties.order(:product_name)
     when "purchase_date"
