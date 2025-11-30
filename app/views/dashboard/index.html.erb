@@ -1254,10 +1254,9 @@
               const question = `Tell me about my ${productName} warranty${merchant ? ' from ' + merchant : ''}`;
               chatbotInput.value = question;
               chatbotInput.focus();
-              // Trigger form submission
+              // Trigger form submission (flag will be set in submit handler)
               const chatbotForm = document.getElementById('chatbot-form');
               if (chatbotForm && !isSubmitting) {
-                isSubmitting = true;
                 const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
                 chatbotForm.dispatchEvent(submitEvent);
               }
@@ -1286,9 +1285,9 @@
               if (chatbotInput) {
                 chatbotInput.value = question;
                 chatbotInput.focus();
-                // Trigger form submission
+                // Trigger form submission (flag will be set in submit handler)
                 const chatbotForm = document.getElementById('chatbot-form');
-                if (chatbotForm) {
+                if (chatbotForm && !isSubmitting) {
                   const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
                   chatbotForm.dispatchEvent(submitEvent);
                 }
