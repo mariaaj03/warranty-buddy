@@ -100,7 +100,9 @@ class MerchantParsers
 
       patterns.each do |pattern|
         if match = text.match(pattern)
-          return parse_price(match[1])
+          # Remove trailing period if it's a sentence ending
+          price_str = match[1].end_with?('.') ? match[1].sub(/\.$/, '') : match[1]
+          return parse_price(price_str)
         end
       end
 
@@ -217,7 +219,9 @@ class MerchantParsers
 
       patterns.each do |pattern|
         if match = text.match(pattern)
-          return parse_price(match[1])
+          # Remove trailing period if it's a sentence ending
+          price_str = match[1].end_with?('.') ? match[1].sub(/\.$/, '') : match[1]
+          return parse_price(price_str)
         end
       end
 

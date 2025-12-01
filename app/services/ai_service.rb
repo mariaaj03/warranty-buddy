@@ -4,12 +4,6 @@ require "uri"
 require "cgi"
 
 class GeminiRateLimitError < StandardError
-  attr_reader :retry_delay
-
-  def initialize(message, retry_delay = nil)
-    super(message)
-    @retry_delay = retry_delay
-  end
 end
 
 class AiService
@@ -209,14 +203,15 @@ class AiService
     PROMPT
 
     response_text = call_gemini_api(prompt)
-    response_text&.strip || "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
+    stripped = response_text&.strip
+    stripped.present? ? stripped : "I'm sorry, I couldn't generate a response. Please try rephrasing your question."
   rescue => e
     raise e
   end
 
   private
 
-  def call_gemini_api(prompt, retry_count = 0)
+  def call_gemini_api(prompt)
     api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
     return nil unless api_key.present?
 
@@ -248,15 +243,7 @@ class AiService
     elsif response.code == "429"
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "Rate limit exceeded"
-      retry_delay = extract_retry_delay(error_data)
-      
-      max_retry_delay = 10
-      if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
-        sleep(retry_delay)
-        return call_gemini_api(prompt, retry_count + 1)
-      end
-      
-      raise GeminiRateLimitError.new(error_message, retry_delay)
+      raise GeminiRateLimitError.new(error_message)
     else
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "API error"
@@ -270,7 +257,7 @@ class AiService
     raise e
   end
 
-  def call_gemini_api_with_image(prompt, image_base64, retry_count = 0)
+  def call_gemini_api_with_image(prompt, image_base64)
     api_key = @api_key || ENV["GOOGLE_GEMINI_API_KEY"] || Rails.application.credentials.dig(:google, :gemini_api_key)
     return nil unless api_key.present?
 
@@ -308,15 +295,7 @@ class AiService
     elsif response.code == "429"
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "Rate limit exceeded"
-      retry_delay = extract_retry_delay(error_data)
-      
-      max_retry_delay = 10
-      if retry_count < 2 && retry_delay && retry_delay > 0 && retry_delay <= max_retry_delay
-        sleep(retry_delay)
-        return call_gemini_api_with_image(prompt, image_base64, retry_count + 1)
-      end
-      
-      raise GeminiRateLimitError.new(error_message, retry_delay)
+      raise GeminiRateLimitError.new(error_message)
     else
       error_data = JSON.parse(response.body) rescue {}
       error_message = error_data.dig("error", "message") || "API error"
@@ -330,18 +309,4 @@ class AiService
     raise e
   end
 
-  def extract_retry_delay(error_data)
-    retry_info = error_data.dig("error", "details")&.find { |d| d["@type"] == "type.googleapis.com/google.rpc.RetryInfo" }
-    if retry_info && retry_info["retryDelay"]
-      delay_str = retry_info["retryDelay"].to_s
-      if delay_str.match?(/^\d+\.?\d*s?$/)
-        seconds = delay_str.gsub(/s$/, "").to_f
-        seconds > 0 ? seconds : nil
-      else
-        nil
-      end
-    else
-      nil
-    end
-  end
 end

@@ -170,6 +170,38 @@ Given("I have products with and without expiry dates") do
   ]
 end
 
+Given("I have products with and without expiry dates for calendar export") do
+  @products = [
+    double("Product",
+      product_name: "iPhone 15 Pro",
+      merchant: "Apple",
+      expiry_date: Date.parse("2025-01-15"),
+      purchase_date: Date.parse("2024-01-15"),
+      warranty_months: 12,
+      status: "active",
+      respond_to?: true
+    ),
+    double("Product", 
+      product_name: "Old iPhone",
+      merchant: "Apple",
+      expiry_date: nil,
+      purchase_date: Date.parse("2020-01-15"),
+      warranty_months: 12,
+      status: "expired",
+      respond_to?: true
+    ),
+    double("Product",
+      product_name: "MacBook Pro",
+      merchant: "Apple",
+      expiry_date: Date.parse("2025-06-15"),
+      purchase_date: Date.parse("2024-06-15"),
+      warranty_months: 12,
+      status: "active",
+      respond_to?: true
+    )
+  ]
+end
+
 Given("I have a product {string} from {string} expiring on {string}") do |product_name, merchant, expiry_date|
   @product = double("Product",
     product_name: product_name,
@@ -235,9 +267,11 @@ Given("the Calendar API is unavailable") do
   @api_unavailable = true
 end
 
-Given("I have products with warranty expirations") do
-  step "I have multiple products with different expiry dates"
+Given("the Calendar API is unavailable for calendar service") do
+  @api_unavailable = true
 end
+
+# Step definition moved to products_controller_steps.rb to avoid ambiguity
 
 Given("some products will fail to export") do
   @products = [
@@ -253,24 +287,27 @@ When("I export warranties to calendar") do
   @mock_event = double("Event", id: "event_123")
   @api_call_count = 0
   
-  if @insufficient_scope_error
-    allow(@mock_calendar_api).to receive(:insert_event).and_raise(@insufficient_scope_error)
-  elsif @api_unavailable
-    allow(@mock_calendar_api).to receive(:insert_event).and_raise(Google::Apis::ServerError.new("API unavailable"))
-  elsif @failing_product_name
-    allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
-      if event.summary.include?(@failing_product_name)
-        raise Google::Apis::ClientError.new("Event creation failed")
-      else
+  # Check if mocks were already set up in Given steps (for new coverage scenarios)
+  unless @calendar_api_mocked
+    if @insufficient_scope_error
+      allow(@mock_calendar_api).to receive(:insert_event).and_raise(@insufficient_scope_error)
+    elsif @api_unavailable
+      allow(@mock_calendar_api).to receive(:insert_event).and_raise(Google::Apis::ServerError.new("API unavailable"))
+    elsif @failing_product_name
+      allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
+        if event.summary.include?(@failing_product_name)
+          raise Google::Apis::ClientError.new("Event creation failed")
+        else
+          @api_call_count += 1
+          @mock_event
+        end
+      end
+    else
+      # Normal success case - count each call
+      allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
         @api_call_count += 1
         @mock_event
       end
-    end
-  else
-    # Normal success case - count each call
-    allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
-      @api_call_count += 1
-      @mock_event
     end
   end
   
@@ -696,6 +733,117 @@ When("I export warranties to calendar with reminder days {string}") do |reminder
   
   @export_result = @calendar_service.export_warranties(@products, reminder_days: days_array)
   @reminder_days = days_array
+end
+
+# New step definitions for coverage scenarios
+Given("I have products with expiry dates for export") do
+  @products = [
+    double("Product",
+      product_name: "Product 1",
+      merchant: "Store 1",
+      purchase_date: Date.parse("2024-01-15"),
+      expiry_date: Date.parse("2025-01-15"),
+      warranty_months: 12,
+      status: "active",
+      respond_to?: true
+    ),
+    double("Product",
+      product_name: "Product 2",
+      merchant: "Store 2",
+      purchase_date: Date.parse("2024-02-15"),
+      expiry_date: Date.parse("2025-02-15"),
+      warranty_months: 12,
+      status: "active",
+      respond_to?: true
+    )
+  ]
+end
+
+Given("the Calendar API will successfully create events") do
+  @mock_event = double("Event", id: "event_123")
+  @created_events = []
+  @calendar_api_mocked = true
+  
+  allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
+    @created_events << event
+    @mock_event
+  end
+  
+  allow(Rails.logger).to receive(:info)
+end
+
+Given("the Calendar API will fail for some events") do
+  @mock_event = double("Event", id: "event_123")
+  @call_count = 0
+  @calendar_api_mocked = true
+  
+  allow(@mock_calendar_api).to receive(:insert_event) do |calendar_id, event|
+    @call_count += 1
+    if @call_count == 1
+      # First event succeeds
+      @mock_event
+    else
+      # Second event fails
+      raise StandardError.new("API error for #{event.summary}")
+    end
+  end
+  
+  allow(Rails.logger).to receive(:info)
+  allow(Rails.logger).to receive(:error)
+end
+
+Given("the Calendar API will raise a generic error") do
+  @generic_error = StandardError.new("Generic API error occurred")
+  @generic_error.set_backtrace(["backtrace line 1", "backtrace line 2"])
+  @calendar_api_mocked = true
+  
+  allow(@mock_calendar_api).to receive(:insert_event).and_raise(@generic_error)
+  allow(Rails.logger).to receive(:error)
+end
+
+Then("events should be created successfully") do
+  expect(@export_result[:success]).to be true
+  expect(@export_result[:created]).to eq(@products.count { |p| p.expiry_date.present? })
+  expect(@export_result[:errors]).to be_empty
+end
+
+Then("the service should log successful event creation") do
+  @products.select { |p| p.expiry_date.present? }.each do |product|
+    expect(Rails.logger).to have_received(:info).with(match(/Created calendar event for #{product.product_name}:/))
+  end
+end
+
+Then("only products with expiry dates should have events created") do
+  products_with_expiry = @products.select { |p| p.expiry_date.present? }
+  expect(@export_result[:success]).to be true
+  expect(@export_result[:created]).to eq(products_with_expiry.count)
+  expect(@export_result[:errors]).to be_empty
+end
+
+Then("the export should succeed with partial errors") do
+  expect(@export_result[:success]).to be true
+  expect(@export_result[:created]).to be > 0
+  expect(@export_result[:errors]).not_to be_empty
+end
+
+Then("errors should be collected for failed products") do
+  expect(@export_result[:errors].any? { |e| e.include?("Product 2") }).to be true
+  expect(Rails.logger).to have_received(:error).with(match(/Failed to create event for Product 2:/))
+end
+
+Then("the error message should indicate calendar permissions issue") do
+  expect(@export_result[:errors].any? { |e| e.include?("Calendar permissions not granted") }).to be true
+end
+
+Then("the service should log the error with backtrace") do
+  # The service logs the error message and then the backtrace separately
+  expect(Rails.logger).to have_received(:error).with(match(/Failed to create event for/)).at_least(:once)
+  # Backtrace is logged as a separate call
+  expect(Rails.logger).to have_received(:error).at_least(:twice)
+end
+
+Then("the error message should be the original error message") do
+  expect(@export_result[:errors].any? { |e| e.include?("Generic API error occurred") }).to be true
 end
 
 Then("it should return a user-friendly error message") do

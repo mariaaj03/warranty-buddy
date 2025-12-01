@@ -44,7 +44,16 @@ class ProductsController < ApplicationController
 
     products = current_user.products.to_a
 
-    offsets = Array(params[:reminders])
+    reminders_param = params[:reminders]
+    reminders_array = if reminders_param.is_a?(Array)
+      reminders_param
+    elsif reminders_param.is_a?(String)
+      reminders_param.split(",").map(&:strip)
+    else
+      []
+    end
+    
+    offsets = reminders_array
                 .map { |s| Integer(s) rescue nil }
                 .compact
                 .select { |n| n >= 0 }

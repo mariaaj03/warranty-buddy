@@ -2,8 +2,12 @@ require 'net/http'
 require 'json'
 
 # Setup and Configuration Steps
+Given("the Google Search API is configured") do
+  allow(Rails.application.credentials).to receive(:dig).with(:google, :search_api_key).and_return("test_api_key")
+  allow(Rails.application.credentials).to receive(:dig).with(:google, :search_engine_id).and_return("test_engine_id")
+end
+
 Given("the Google Search API credentials are configured") do
-  # Mock Rails.application.credentials to return API keys
   allow(Rails.application.credentials).to receive(:dig).with(:google, :search_api_key).and_return("test_api_key")
   allow(Rails.application.credentials).to receive(:dig).with(:google, :search_engine_id).and_return("test_engine_id")
 end
@@ -74,6 +78,11 @@ end
 
 Given("the Google Search API request fails") do
   allow(Net::HTTP).to receive(:get_response).and_raise(StandardError.new("Network error"))
+end
+
+When("I lookup warranty info for product {string} from merchant {string} using Google Search") do |product, merchant|
+  @search_service = GoogleSearchService.new
+  @lookup_result = @search_service.lookup_warranty_info(product, merchant)
 end
 
 When("I lookup warranty info for product {string} from merchant {string}") do |product, merchant|
@@ -194,9 +203,6 @@ Then("it should return an empty array") do
   expect(@search_results).to eq([])
 end
 
-Then("it should log an error") do
-  expect(Rails.logger).to have_received(:error)
-end
 
 # extract_warranty_info Steps (tested through lookup_warranty_info)
 Given("the Google Search API returns results with {string}") do |warranty_text|

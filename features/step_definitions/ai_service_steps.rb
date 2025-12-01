@@ -38,6 +38,11 @@ Given("the Gemini API returns status {int} with valid response") do |code|
   }.to_json
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(code, body)
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   @ai_service = AiService.new
@@ -53,6 +58,11 @@ Given("the Gemini API returns status {int} with empty text") do |code|
   }.to_json
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(code, body)
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   @ai_service = AiService.new
@@ -80,6 +90,11 @@ Given("the Gemini API returns status {int} with retry delay of {int} seconds") d
   }.to_json
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @error_response = create_mock_http_response(code, error_body)
   @success_response = create_mock_http_response(200, success_body)
   @retry_delay_value = delay
@@ -101,6 +116,11 @@ Given("the Gemini API returns status {int} without retry delay") do |code|
   }.to_json
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(code, body)
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   @ai_service = AiService.new
@@ -114,6 +134,11 @@ Given("the Gemini API returns status {int} with error message") do |code|
   }.to_json
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(code, body)
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   @ai_service = AiService.new
@@ -122,6 +147,11 @@ end
 
 Given("the Gemini API returns invalid JSON") do
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(200, "invalid json {")
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   @ai_service = AiService.new
@@ -140,7 +170,7 @@ end
 
 When("I call the Gemini API with prompt {string}") do |prompt|
   begin
-    @result = @ai_service.send(:call_gemini_api, prompt, @retry_count || 0)
+    @result = @ai_service.send(:call_gemini_api, prompt)
   rescue => e
     @error = e
   end
@@ -149,7 +179,7 @@ end
 When("I call the Gemini API with image and prompt {string}") do |prompt|
   image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
   begin
-    @result = @ai_service.send(:call_gemini_api_with_image, prompt, image_base64, @retry_count || 0)
+    @result = @ai_service.send(:call_gemini_api_with_image, prompt, image_base64)
   rescue => e
     @error = e
   end
@@ -283,6 +313,11 @@ When("I answer warranty question {string} with search results") do |question|
   allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(200, {
     candidates: [{
       content: {
@@ -304,6 +339,11 @@ When("I answer warranty question {string} without search results") do |question|
   allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(200, {
     candidates: [{
       content: {
@@ -339,6 +379,11 @@ Given("the Gemini API returns receipt confirmation") do
   allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
   
   @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
   @mock_response = create_mock_http_response(200, {
     candidates: [{
       content: {
@@ -351,6 +396,38 @@ Given("the Gemini API returns receipt confirmation") do
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   
   @ai_service = AiService.new
+end
+
+Given("the Gemini API returns receipt confirmation with markdown") do
+  # Ensure API key is configured before creating service
+  allow(Rails.application.credentials).to receive(:dig).with(:google, :gemini_api_key).and_return("test_api_key")
+  allow(ENV).to receive(:[]).and_call_original
+  allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
+  
+  @mock_http = create_mock_http
+  request_double = double("Net::HTTP::Post")
+  allow(Net::HTTP::Post).to receive(:new).and_return(request_double)
+  allow(request_double).to receive(:[]=)
+  allow(request_double).to receive(:body=)
+  
+  @mock_response = create_mock_http_response(200, {
+    candidates: [{
+      content: {
+        parts: [{
+          text: '```json\n{"is_receipt": true, "product_name": "iPhone 15 Pro", "merchant": "Apple", "purchase_date": "2024-01-15"}\n```'
+        }]
+      }
+    }]
+  }.to_json)
+  allow(@mock_http).to receive(:request).and_return(@mock_response)
+  
+  # Create service after mocks are set up
+  @ai_service = AiService.new
+end
+
+Given("the AI service has no client configured") do
+  @ai_service = AiService.new(nil)
+  allow(@ai_service).to receive(:instance_variable_get).with(:@client).and_return(nil)
 end
 
 Given("the Gemini API returns non-receipt confirmation") do
@@ -386,5 +463,121 @@ Then("it should return receipt data") do
   expect(@result).to be_a(Hash)
   expect(@result["is_receipt"]).to eq(true)
   expect(@result["product_name"]).to eq("iPhone 15 Pro")
+end
+
+Given("the AI service has no client configured") do
+  allow(Rails.application.credentials).to receive(:dig).with(:google, :gemini_api_key).and_return(nil)
+  allow(ENV).to receive(:[]).and_call_original
+  allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
+  @ai_service = AiService.new
+end
+
+Then("it should return nil") do
+  expect(@result).to be_nil
+end
+
+# New step definitions for coverage scenarios
+When("I create an AI service with a client") do
+  @mock_client = double("Client")
+  @ai_service = AiService.new(@mock_client)
+end
+
+Then("the service should use the provided client") do
+  expect(@ai_service.instance_variable_get(:@client)).to eq(@mock_client)
+end
+
+Then("the API key should be nil") do
+  expect(@ai_service.instance_variable_get(:@api_key)).to be_nil
+end
+
+Given("the Gemini API key is not configured") do
+  allow(Rails.application.credentials).to receive(:dig).with(:google, :gemini_api_key).and_return(nil)
+  allow(ENV).to receive(:[]).and_call_original
+  allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
+end
+
+When("I create an AI service without API key") do
+  allow(Rails.logger).to receive(:error)
+  @ai_service = AiService.new
+end
+
+Then("the service should log an error about missing API key") do
+  expect(Rails.logger).to have_received(:error).with("Gemini API key not found in credentials or environment")
+end
+
+Then("the client should be nil") do
+  expect(@ai_service.instance_variable_get(:@client)).to be_nil
+end
+
+Given("the Gemini API returns invalid JSON for receipt extraction") do
+  @mock_http = create_mock_http
+  @mock_response = create_mock_http_response(200, {
+    candidates: [{
+      content: {
+        parts: [{
+          text: '{"is_receipt": true, "product_name": "iPhone 15 Pro" invalid json'
+        }]
+      }
+    }]
+  }.to_json)
+  allow(@mock_http).to receive(:request).and_return(@mock_response)
+  
+  @ai_service = AiService.new
+end
+
+Given("the Gemini API returns invalid JSON for warranty lookup") do
+  @mock_http = create_mock_http
+  @mock_response = create_mock_http_response(200, {
+    candidates: [{
+      content: {
+        parts: [{
+          text: '{"standard_warranty_months": 12 invalid json'
+        }]
+      }
+    }]
+  }.to_json)
+  allow(@mock_http).to receive(:request).and_return(@mock_response)
+  
+  @ai_service = AiService.new
+end
+
+Given("the Gemini API returns invalid JSON for warranty eligibility") do
+  @mock_http = create_mock_http
+  @mock_response = create_mock_http_response(200, {
+    candidates: [{
+      content: {
+        parts: [{
+          text: '{"is_covered": true invalid json'
+        }]
+      }
+    }]
+  }.to_json)
+  allow(@mock_http).to receive(:request).and_return(@mock_response)
+  
+  @ai_service = AiService.new
+end
+
+Given("the Gemini API returns invalid JSON for image extraction") do
+  @mock_http = create_mock_http
+  @mock_response = create_mock_http_response(200, {
+    candidates: [{
+      content: {
+        parts: [{
+          text: '{"is_receipt": true, "product_name": "iPhone 15 Pro" invalid json'
+        }]
+      }
+    }]
+  }.to_json)
+  allow(@mock_http).to receive(:request).and_return(@mock_response)
+  
+  @ai_service = AiService.new
+end
+
+When("I lookup warranty info for {string} from {string}") do |product_name, merchant|
+  @result = @ai_service.lookup_warranty_info(product_name, merchant)
+end
+
+When("I check warranty eligibility for {string} with issue {string}") do |product_name, issue_description|
+  @result = @ai_service.check_warranty_eligibility(product_name, issue_description, "Standard warranty terms")
 end
 

@@ -64,15 +64,15 @@ Given("I have Gmail messages with attachments") do
   allow(@mock_fetcher).to receive(:extract_html_from_message).and_return("")
   allow(@mock_fetcher).to receive(:extract_text_from_message).and_return("")
   
-  # Mock attachments
+  allow(@gmail_service).to receive(:parse_email_content).and_return(nil)
+  
   mock_attachments = [
     { filename: "receipt.pdf", mime_type: "application/pdf", attachment_id: "att_123" }
   ]
   allow(@mock_fetcher).to receive(:extract_attachments).and_return(mock_attachments)
   
-  # Mock attachment processing
   mock_attachment_data = double("AttachmentData", data: Base64.encode64("fake pdf content"))
-  allow(@mock_fetcher).to receive(:get_attachment).and_return(mock_attachment_data)
+  allow(@mock_fetcher).to receive(:get_attachment).with("message_with_attachment", "att_123", "me").and_return(mock_attachment_data)
   allow(@mock_receipt_processor).to receive(:process_pdf).and_return({
     merchant: "Best Buy",
     order_number: "BB123",
@@ -425,37 +425,6 @@ Given("the Gmail API returns an authentication error") do
   allow(@mock_fetcher).to receive(:service).and_return(mock_service)
 end
 
-Given("I have Gmail messages with attachments") do
-  @mock_messages = [double("Message", id: "message_with_attachment")]
-  allow(@mock_fetcher).to receive(:list_order_messages).and_return(@mock_messages)
-  
-  mock_full_message = create_mock_gmail_message(
-    id: "message_with_attachment",
-    subject: "Receipt - Order #12345",
-    from: "orders@bestbuy.com"
-  )
-  
-  allow(@mock_fetcher).to receive(:get_message).and_return(mock_full_message)
-  allow(@mock_fetcher).to receive(:extract_html_from_message).and_return("")
-  allow(@mock_fetcher).to receive(:extract_text_from_message).and_return("")
-  
-  # Mock attachments
-  mock_attachments = [
-    { filename: "receipt.pdf", mime_type: "application/pdf", attachment_id: "att_123" }
-  ]
-  allow(@mock_fetcher).to receive(:extract_attachments).and_return(mock_attachments)
-  
-  # Mock attachment processing
-  mock_attachment_data = double("AttachmentData", data: Base64.encode64("fake pdf content"))
-  allow(@mock_fetcher).to receive(:get_attachment).and_return(mock_attachment_data)
-  allow(@mock_receipt_processor).to receive(:process_pdf).and_return({
-    merchant: "Best Buy",
-    order_number: "BB123",
-    purchase_date: Date.today,
-    line_items: [{ name: "MacBook Pro", price: 1999.0 }],
-    total_amount: 1999.0
-  })
-end
 
 # Core Processing Steps
 When("I parse receipt emails from Gmail") do
@@ -489,14 +458,6 @@ Then("it should clean up temporary files after processing") do
   expect(@mock_receipt_processor).to have_received(:cleanup)
 end
 
-# Merchant Extraction Steps
-When("I extract merchant from email {string}") do |email_address|
-  @extracted_merchant = @gmail_service.send(:extract_merchant_from_headers, email_address, "", "")
-end
-
-Then("the merchant should be {string}") do |expected_merchant|
-  expect(@extracted_merchant).to eq(expected_merchant)
-end
 
 # Promotional Email Filtering
 When("I parse email with promotional subject {string}") do |subject|
@@ -552,29 +513,6 @@ Then("it should parse the order information") do
 end
 
 # Parser Selection Steps
-Given("I have an Amazon order email") do
-  @amazon_html = "<html><body><p>Your Amazon order #123-456-789</p></body></html>"
-  @amazon_text = "Your Amazon order #123-456-789"
-  @amazon_subject = "Your Amazon order has shipped"
-  @amazon_from = "orders@amazon.com"
-end
-
-When("I parse the email content with Amazon merchant") do
-  # Mock Amazon parser
-  @mock_amazon_parser = double("AmazonParser")
-  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_amazon_parser)
-  allow(@mock_amazon_parser).to receive(:parse).and_return({
-    merchant: "Amazon",
-    order_number: "123-456-789",
-    line_items: [{ name: "iPhone 15 Pro", price: 999.0 }]
-  })
-  
-  @parsed_result = @gmail_service.send(:parse_email_content,
-    @amazon_html, @amazon_text, @amazon_subject, @amazon_from, 
-    "Mon, 15 Jan 2024 10:30:00 -0800", "msg_amazon"
-  )
-end
-
 Then("it should use the Amazon parser first") do
   expect(MerchantParsers).to have_received(:get_parser).with("Amazon")
 end
@@ -1384,7 +1322,7 @@ Then("it should use AI extracted product name") do
   expect(@parsed_result[:product_name]).to eq("AI Extracted Product")
 end
 
-Given("the AI service is not configured") do
+Given("the AI service is not configured for Gmail") do
   @mock_ai_service = double("AiService")
   allow(AiService).to receive(:new).and_return(@mock_ai_service)
   allow(@mock_ai_service).to receive(:instance_variable_get).with(:@client).and_return(nil)
@@ -1523,19 +1461,17 @@ Given("I have a message that parses to a valid receipt") do
   allow(@mock_fetcher).to receive(:extract_text_from_message).and_return(mock_full_message.text_content)
   allow(@mock_fetcher).to receive(:extract_attachments).and_return([])
   
-  allow(@gmail_service).to receive(:parse_email_content).and_return({
-    product_name: "iPhone 15 Pro",
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [{ name: "iPhone 15 Pro", quantity: 1, price: 999.0 }],
     merchant: "Amazon",
-    purchase_date: Date.today,
-    warranty_months: 12,
-    warranty_type: "manufacturer",
-    return_policy_days: 30,
-    return_deadline: nil,
-    source: "gmail_parsed",
-    raw_email_id: "valid_receipt_message",
-    order_number: "12345",
-    total_amount: 999.0
+    order_number: "12345"
   })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
 end
 
 Then("it should add the receipt to parsed receipts") do
@@ -1746,18 +1682,6 @@ Then("receipts found count should be incremented") do
   expect(@result.length).to be > 0
 end
 
-Given("I have a blank merchant name") do
-  @merchant_name = ""
-end
-
-When("I clean the merchant name") do
-  @result = @gmail_service.send(:clean_merchant_name, @merchant_name)
-end
-
-Then("it should return nil for blank merchant name") do
-  expect(@result).to be_nil
-end
-
 Given("I have an attachment with image mime type") do
   @attachment = {
     filename: "receipt.jpg",
@@ -1803,6 +1727,245 @@ Then("it should skip the attachment") do
   @result = @gmail_service.send(:process_attachments, [@attachment], @message_id, @user_id)
   expect(@result).to be_an(Array)
   expect(@result.length).to eq(0)
+end
+
+Given("I have a promotional email") do
+  @html_content = "<html><body>Promotional content</body></html>"
+  @text_content = "Promotional content"
+  @subject = "Last minute gifts - Shop now!"
+  @from = "marketing@store.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "promo_msg"
+end
+
+When("I parse the email content for coverage") do
+  @parsed_result = @gmail_service.send(:parse_email_content, @html_content, @text_content, @subject, @from, @date_header, @message_id)
+end
+
+Then("the email content should return nil") do
+  expect(@parsed_result).to be_nil
+end
+
+Given("I have an email from Digital merchant") do
+  @html_content = "<html><body>Digital order</body></html>"
+  @text_content = "Digital order"
+  @subject = "Your Digital Order"
+  @from = "Digital"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "digital_msg"
+end
+
+Given("I have an email where merchant parser returns nil") do
+  @html_content = "<html><body>Order content</body></html>"
+  @text_content = "Order content"
+  @subject = "Order Confirmation #12345"
+  @from = "orders@unknown.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "unknown_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return(nil)
+  allow(MerchantParsers).to receive(:get_parser).and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:parse).and_return({
+    line_items: [{ name: "Test Product", quantity: 1, price: 100 }],
+    merchant: "Unknown",
+    order_number: "12345"
+  })
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+end
+
+Then("it should use generic parser") do
+  expect(EmailOrderParser).to have_received(:new)
+end
+
+Then("the email content should return parsed data") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result).to be_a(Hash)
+end
+
+Given("I have an email with order number in subject only") do
+  @html_content = "<html><body>Order content</body></html>"
+  @text_content = "Order content"
+  @subject = "Your Order #12345"
+  @from = "orders@amazon.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "order_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [{ name: "Product", quantity: 1, price: 100 }],
+    merchant: "Amazon",
+    order_number: nil
+  })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+end
+
+Then("it should extract order number from subject") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result[:order_number]).to eq("12345")
+end
+
+Given("I have an email with product name in subject") do
+  @html_content = "<html><body>Order content</body></html>"
+  @text_content = "Order content"
+  @subject = "iPhone 15 Pro - Order #12345"
+  @from = "orders@amazon.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "product_subject_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [],
+    merchant: "Amazon",
+    order_number: "12345"
+  })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+end
+
+Then("the email should extract product name from subject") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result[:product_name]).to be_present
+end
+
+Given("I have an email with product name in content") do
+  @html_content = "<html><body><p>MacBook Pro 16-inch</p></body></html>"
+  @text_content = "MacBook Pro 16-inch\nPrice: $1999.00"
+  @subject = "Order Confirmation #12345"
+  @from = "orders@amazon.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "product_content_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [],
+    merchant: "Amazon",
+    order_number: "12345"
+  })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+end
+
+Then("it should extract product name from content") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result[:product_name]).to be_present
+end
+
+Given("the AI service is configured for Gmail") do
+  @mock_ai_service = double("AiService")
+  @mock_client = double("client")
+  allow(@mock_ai_service).to receive(:instance_variable_get).with(:@client).and_return(@mock_client)
+  allow(@mock_ai_service).to receive(:extract_receipt_info).and_return({
+    "product_name" => "AI Extracted Product"
+  })
+  allow(AiService).to receive(:new).and_return(@mock_ai_service)
+end
+
+Given("I have an email where product name needs AI extraction") do
+  @html_content = "<html><body>Order content with lots of text that exceeds 50 characters and needs AI to extract product name</body></html>"
+  @text_content = "Order content with lots of text that exceeds 50 characters and needs AI to extract product name"
+  @subject = "Order Confirmation #12345"
+  @from = "orders@amazon.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "ai_extract_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [],
+    merchant: "Amazon",
+    order_number: "12345"
+  })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+  allow(@gmail_service).to receive(:extract_product_name_from_subject_line).and_return(nil)
+  allow(@gmail_service).to receive(:extract_product_name_from_email_content).and_return(nil)
+end
+
+Then("it should use AI to extract product name") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result[:product_name]).to eq("AI Extracted Product")
+end
+
+Given("I have an email with only order number") do
+  @html_content = "<html><body>Order content</body></html>"
+  @text_content = "Order content"
+  @subject = "Order Confirmation #12345"
+  @from = "orders@amazon.com"
+  @date_header = "Mon, 15 Jan 2024 10:30:00 -0800"
+  @message_id = "order_only_msg"
+  
+  @mock_merchant_parser = double("MerchantParser")
+  allow(@mock_merchant_parser).to receive(:parse).and_return({
+    line_items: [],
+    merchant: "Amazon",
+    order_number: "12345"
+  })
+  allow(MerchantParsers).to receive(:get_parser).with("Amazon").and_return(@mock_merchant_parser)
+  
+  @mock_generic_parser = double("EmailOrderParser")
+  allow(EmailOrderParser).to receive(:new).and_return(@mock_generic_parser)
+  allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
+  allow(@gmail_service).to receive(:extract_product_name_from_subject_line).and_return(nil)
+  allow(@gmail_service).to receive(:extract_product_name_from_email_content).and_return(nil)
+  allow(AiService).to receive(:new).and_return(double("AiService", instance_variable_get: nil))
+end
+
+Then("it should use order number as product name") do
+  expect(@parsed_result).not_to be_nil
+  expect(@parsed_result[:product_name]).to eq("Order 12345")
+end
+
+Given("I have a merchant name with special characters") do
+  @merchant_name = "Orders-Support@walmart.com"
+end
+
+Then("it should return cleaned merchant name") do
+  expect(@result).to eq("Walmart")
+end
+
+Given("I have email content with product pattern matches") do
+  @html_content = "<html><body></body></html>"
+  @text_content = "Item: MacBook Pro 16-inch\nQty: 1\nPrice: $1999.00"
+  @subject = "Order Confirmation"
+end
+
+When("I extract product name from email content for pattern test") do
+  @extracted_name = @gmail_service.send(:extract_product_name_from_email_content, @html_content, @text_content, @subject)
+end
+
+Then("the email content should return extracted product name") do
+  expect(@extracted_name).to be_present
+  expect(@extracted_name.length).to be >= 10
+end
+
+Given("I have a subject line with product pattern matches") do
+  @subject = "iPhone 15 Pro - Order #12345"
+  @order_number = "12345"
+end
+
+When("I extract product name from subject line") do
+  @extracted_name = @gmail_service.send(:extract_product_name_from_subject_line, @subject, @order_number)
+end
+
+Then("the subject line should return extracted product name") do
+  expect(@extracted_name).to be_present
+  expect(@extracted_name.length).to be >= 5
 end
 
 Given("I have an attachment that returns receipt data without merchant") do
@@ -1890,4 +2053,130 @@ Then("it should determine warranty length for the receipt") do
   expect(@result.length).to eq(1)
   expect(@result.first).to have_key(:warranty_months)
   expect(@result.first[:warranty_months]).to be_a(Integer)
+end
+
+# New step definitions for coverage scenarios
+Given("I have a message that parses to nil") do
+  @mock_messages = [double("Message", id: "message_nil_receipt")]
+  allow(@mock_fetcher).to receive(:list_order_messages).and_return(@mock_messages)
+  
+  mock_full_message = create_mock_gmail_message(
+    id: "message_nil_receipt",
+    subject: "Order Confirmation #12345",
+    from: "orders@amazon.com",
+    date: "Mon, 15 Jan 2024 10:30:00 -0800",
+    html_content: "<html><body>Promotional content</body></html>",
+    text_content: "Promotional content"
+  )
+  
+  allow(@mock_fetcher).to receive(:get_message).with("message_nil_receipt", "me").and_return(mock_full_message)
+  allow(@mock_fetcher).to receive(:extract_html_from_message).and_return(mock_full_message.html_content)
+  allow(@mock_fetcher).to receive(:extract_text_from_message).and_return(mock_full_message.text_content)
+  allow(@mock_fetcher).to receive(:extract_attachments).and_return([])
+  
+  # Mock parse_email_content to return nil
+  allow(@gmail_service).to receive(:parse_email_content).and_return(nil)
+end
+
+Given("I have a message with no attachments") do
+  @mock_messages = [double("Message", id: "message_no_attachments")]
+  allow(@mock_fetcher).to receive(:list_order_messages).and_return(@mock_messages)
+  
+  mock_full_message = create_mock_gmail_message(
+    id: "message_no_attachments",
+    subject: "Order Confirmation #12345",
+    from: "orders@amazon.com",
+    date: "Mon, 15 Jan 2024 10:30:00 -0800",
+    html_content: "<html><body>Order content</body></html>",
+    text_content: "Order content"
+  )
+  
+  allow(@mock_fetcher).to receive(:get_message).with("message_no_attachments", "me").and_return(mock_full_message)
+  allow(@mock_fetcher).to receive(:extract_html_from_message).and_return(mock_full_message.html_content)
+  allow(@mock_fetcher).to receive(:extract_text_from_message).and_return(mock_full_message.text_content)
+  allow(@mock_fetcher).to receive(:extract_attachments).and_return([])
+  
+  # Mock parse_email_content to return a valid receipt
+  allow(@gmail_service).to receive(:parse_email_content).and_return({
+    product_name: "iPhone 15 Pro",
+    merchant: "Amazon",
+    purchase_date: Date.today,
+    warranty_months: 12,
+    warranty_type: "manufacturer",
+    return_policy_days: 30,
+    return_deadline: nil,
+    source: "gmail_parsed",
+    raw_email_id: "message_no_attachments",
+    order_number: "12345",
+    total_amount: 999.0
+  })
+end
+
+Given("I have a message that raises an error during processing") do
+  @mock_messages = [
+    double("Message", id: "message_error"),
+    double("Message", id: "message_success")
+  ]
+  allow(@mock_fetcher).to receive(:list_order_messages).and_return(@mock_messages)
+  
+  # First message raises an error
+  allow(@mock_fetcher).to receive(:get_message).with("message_error", "me").and_raise(StandardError.new("API Error"))
+  
+  # Second message succeeds
+  mock_full_message = create_mock_gmail_message(
+    id: "message_success",
+    subject: "Order Confirmation #12345",
+    from: "orders@amazon.com",
+    date: "Mon, 15 Jan 2024 10:30:00 -0800",
+    html_content: "<html><body>Order content</body></html>",
+    text_content: "Order content"
+  )
+  
+  allow(@mock_fetcher).to receive(:get_message).with("message_success", "me").and_return(mock_full_message)
+  allow(@mock_fetcher).to receive(:extract_html_from_message).and_return(mock_full_message.html_content)
+  allow(@mock_fetcher).to receive(:extract_text_from_message).and_return(mock_full_message.text_content)
+  allow(@mock_fetcher).to receive(:extract_attachments).and_return([])
+  
+  # Mock parse_email_content to return a valid receipt
+  allow(@gmail_service).to receive(:parse_email_content).and_return({
+    product_name: "iPhone 15 Pro",
+    merchant: "Amazon",
+    purchase_date: Date.today,
+    warranty_months: 12,
+    warranty_type: "manufacturer",
+    return_policy_days: 30,
+    return_deadline: nil,
+    source: "gmail_parsed",
+    raw_email_id: "message_success",
+    order_number: "12345",
+    total_amount: 999.0
+  })
+end
+
+Then("it should not add the receipt to parsed receipts") do
+  expect(@result).to be_an(Array)
+  expect(@result).to be_empty
+end
+
+Then("receipts found count should not be incremented") do
+  expect(@result.length).to eq(0)
+end
+
+Then("it should not process any attachments") do
+  expect(@result).to be_an(Array)
+  # Should have receipt from email content but no attachment receipts
+  expect(@result.length).to eq(1)
+  expect(@result.first[:source]).to eq("gmail_parsed")
+end
+
+Then("it should continue processing other messages") do
+  expect(@result).to be_an(Array)
+  # Should have at least one receipt from the successful message
+  expect(@result.length).to be >= 1
+end
+
+Then("it should return parsed receipts from successful messages") do
+  expect(@result).to be_an(Array)
+  expect(@result.length).to eq(1)
+  expect(@result.first[:product_name]).to eq("iPhone 15 Pro")
 end

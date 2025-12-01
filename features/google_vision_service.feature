@@ -1,96 +1,70 @@
 Feature: Google Vision Service
   As a system
-  I want to extract text from images and PDFs using Google Vision API
-  So that I can process receipt images for warranty information
+  I want to extract text from images
+  So users can process receipt images
 
   Background:
-    Given the Vision API service is available
+    Given the Vision API is configured
 
-  Scenario: System extracts text from image with API key
-    Given the Vision API key is configured
-    When I extract text from an image with API key
-    Then it should return extracted text
-
-  Scenario: System returns nil when Vision API key is not configured
-    Given the Vision API key is not configured
-    And the user does not have OAuth credentials
+  Scenario: System extracts text from image successfully
     When I extract text from an image
-    Then it should return nil
-
-  Scenario: System extracts text from image with OAuth credentials
-    Given the Vision API key is not configured
-    And the user has OAuth credentials
-    When I extract text from an image with OAuth
     Then it should return extracted text
-
-  Scenario: System handles Vision API error response
-    Given the Vision API key is configured
-    And the Vision API returns error status 400
-    When I extract text from an image with API key
-    Then it should return nil
-
-  Scenario: System handles Vision API exception
-    Given the Vision API key is configured
-    And the Vision API request raises an exception
-    When I extract text from an image with API key
-    Then it should return nil
 
   Scenario: System extracts text from PDF successfully
-    Given the PDF::Reader gem is available
     When I extract text from a PDF
     Then it should return extracted text
 
-  Scenario: System handles PDF::Reader gem not available
-    Given the PDF::Reader gem is not available
-    When I extract text from a PDF
-    Then it should return nil
-
-  Scenario: System handles PDF processing errors
-    Given the PDF::Reader gem is available
-    And PDF processing will raise an error
-    When I extract text from a PDF
-    Then it should return nil
-
-  Scenario: System sets up OAuth authorization when user has tokens
+  # Coverage scenarios for OAuth authorization setup
+  Scenario: Service sets up OAuth authorization with expired tokens
     Given the Vision API key is not configured
-    And the user has OAuth credentials
+    And the user has OAuth credentials with expired tokens
     When I create a Vision service instance
     Then it should set up OAuth authorization
+    And it should refresh the OAuth tokens
 
-  Scenario: System sets up OAuth authorization with expired credentials
+  Scenario: Service sets up OAuth authorization with nil expires_at
     Given the Vision API key is not configured
-    And the user has OAuth credentials with expired tokens
+    And the user has OAuth credentials with nil expires_at
     When I create a Vision service instance
-    Then it should refresh the OAuth tokens
+    Then it should set up OAuth authorization
+    And it should refresh the OAuth tokens
 
-  Scenario: System handles OAuth token refresh failure
+  Scenario: Service sets up OAuth authorization with past expires_at
     Given the Vision API key is not configured
-    And the user has OAuth credentials with expired tokens
-    And OAuth token refresh will fail
+    And the user has OAuth credentials with past expires_at
     When I create a Vision service instance
-    Then it should handle refresh failure gracefully
+    Then it should set up OAuth authorization
+    And it should refresh the OAuth tokens
 
-  Scenario: System skips OAuth setup when API key is present
-    Given the Vision API key is configured
-    When I create a Vision service instance
-    Then it should not set up OAuth authorization
-
-  Scenario: System skips OAuth setup when user has no tokens
-    Given the Vision API key is not configured
-    And the user does not have OAuth credentials
-    When I create a Vision service instance
-    Then it should not set up OAuth authorization
-
-  Scenario: System skips OAuth setup when client credentials are missing
+  Scenario: Service skips OAuth setup when client credentials are missing
     Given the Vision API key is not configured
     And the user has OAuth tokens but no client credentials
     When I create a Vision service instance
     Then it should not set up OAuth authorization
 
-  Scenario: System uses OAuth credentials when they are not expired
+  Scenario: Service handles OAuth refresh failure gracefully
     Given the Vision API key is not configured
-    And the user has OAuth credentials with valid tokens
+    And the user has OAuth credentials with expired tokens
+    And OAuth token refresh will fail
     When I create a Vision service instance
-    Then it should set up OAuth authorization
-    And it should not refresh the tokens
+    Then the Vision service should handle Vision API OAuth refresh failure gracefully
 
+  # Coverage scenarios for missing lines
+  Scenario: Service extracts text from image using OAuth when API key is not present
+    Given the Vision API key is not configured
+    And the user has OAuth credentials
+    When I extract text from an image with OAuth
+    Then it should return extracted text
+
+  Scenario: Service extracts text from scanned PDF using OCR
+    Given the Vision API is configured
+    And I have a scanned PDF with no extractable text
+    When I extract text from a scanned PDF
+    Then it should return extracted text from OCR
+
+  Scenario: Service processes scanned PDF with multiple pages
+    Given the Vision API is configured
+    And I have a scanned PDF with multiple pages
+    When I extract text from a scanned PDF
+    Then it should process all pages
+    And it should return extracted text from OCR

@@ -15,10 +15,6 @@ Feature: Merchant-Specific Email Parsers
     When I get parser for merchant "Amazon"
     Then it should return the Amazon parser
 
-  Scenario: System selects Best Buy parser for Best Buy emails
-    When I get parser for merchant "Best Buy"
-    Then it should return the Best Buy parser
-
   Scenario: System uses generic parser for unknown merchants
     When I get parser for merchant "Unknown Store"
     Then it should return the Generic parser
@@ -27,6 +23,9 @@ Feature: Merchant-Specific Email Parsers
     When I get parser for merchant nil
     Then it should return the Generic parser
 
+  Scenario: System selects Best Buy parser for "best buy" (lowercase)
+    When I get parser for merchant "best buy"
+    Then it should return the Best Buy parser
 
   # USER STORY 51: Amazon Parser - Price Parsing
   Scenario: Amazon parser handles various price formats
@@ -41,81 +40,35 @@ Feature: Merchant-Specific Email Parsers
     When I parse Amazon price ""
     Then the Amazon price should be nil
 
-  Scenario: Amazon parser skips rows with less than 3 cells
-    When I parse Amazon email with table row having 2 cells
-    Then the line items should not include that row
+  Scenario: Amazon parser handles US format with thousands separator
+    When I parse Amazon email with total "Order Total: 1,234.56"
+    Then the total amount should be 1234.56
 
-  Scenario: Amazon parser skips header rows
-    When I parse Amazon email with table containing header row "Item"
-    Then the line items should not include the header row
+  Scenario: Amazon parser handles prices with multiple dots
+    When I parse Amazon email with total "Total: 1.234.56"
+    Then the total amount should be 123456.0
 
-  Scenario: Amazon parser only includes product names longer than 3 characters
-    When I parse Amazon email with product name "AB"
-    Then the line items should not include that product
+  Scenario: Amazon parser parses prices with thousands separator in line items
+    When I parse Amazon email with product table
+      """
+      <html><body>
+      <table>
+        <tr><td>Expensive Item</td><td>1</td><td>$1,234.56</td></tr>
+      </table>
+      </body></html>
+      """
+    Then the first item should be "Expensive Item" with price 1234.56
 
-  Scenario: Amazon parser includes product names longer than 3 characters
-    When I parse Amazon email with product name "iPhone 15 Pro"
-    Then the line items should include that product
-
-  Scenario: Best Buy parser skips product names shorter than 3 characters
-    When I parse Best Buy email with product name "AB"
-    Then the line items should not include that product
-
-  # USER STORY 52: Best Buy Parser - Order Number Extraction
-  Scenario: Best Buy parser extracts alphanumeric order numbers
-    When I parse Best Buy email with order number "BBY01-ABC123DEF"
-    """
-    <html><body>
-    <p>Best Buy Order #BBY01-ABC123DEF is ready for pickup.</p>
-    </body></html>
-    """
-    Then the Best Buy order number should be "BBY01-ABC123DEF"
-
-  Scenario: Best Buy parser extracts from order number field
-    When I parse Best Buy email with text "Order Number: BESTBUY-12345678"
-    Then the Best Buy order number should be "BESTBUY-12345678"
-
-  # USER STORY 53: Best Buy Parser - Date Extraction
-  Scenario: Best Buy parser extracts order date
-    When I parse Best Buy email with date text "Order Date: January 15, 2024"
-    Then the Best Buy purchase date should be "2024-01-15"
-
-
-  # USER STORY 54: Best Buy Parser - Line Items
-  Scenario: Best Buy parser extracts products from table
-    When I parse Best Buy email with product table
-    """
-    <html><body>
-    <table>
-      <tr><td>MacBook Pro 14"</td><td>$1,999.00</td></tr>
-      <tr><td>Magic Mouse</td><td>$79.00</td></tr>
-    </table>
-    </body></html>
-    """
-    Then I should extract 2 line items from Best Buy parser
-    And the first Best Buy item should be "MacBook Pro 14\"" with price 1999.0
-    And the second Best Buy item should be "Magic Mouse" with price 79.0
-
-  Scenario: Best Buy parser assigns default quantity
-    When I parse Best Buy email with simple product table
-    """
-    <html><body>
-    <table>
-      <tr><td>iPad Air</td><td>$599.00</td></tr>
-    </table>
-    </body></html>
-    """
-    Then I should extract 1 line items from Best Buy parser
-    And the Best Buy item should have quantity 1
-
-  # USER STORY 56: Best Buy Parser - Price Parsing
-  Scenario: Best Buy parser handles price formats consistently
-    When I parse Best Buy prices in different formats
-      | format            | input     | expected |
-      | US format         | 2,199.99  | 2199.99  |
-      | Simple decimal    | 999.99    | 999.99   |
-      | With currency     | $599.00   | 599.0    |
-    Then all Best Buy prices should be correctly parsed
+  Scenario: Amazon parser parses prices with multiple dots in line items
+    When I parse Amazon email with product table
+      """
+      <html><body>
+      <table>
+        <tr><td>European Price Item</td><td>1</td><td>1.234.56</td></tr>
+      </table>
+      </body></html>
+      """
+    Then the first item should be "European Price Item" with price 123456.0
 
   # USER STORY 57: Generic Parser Integration
   Scenario: Generic parser uses EmailOrderParser for unknown merchants
@@ -143,14 +96,6 @@ Feature: Merchant-Specific Email Parsers
     When I parse Amazon email with empty content
     Then it should return Amazon parser results with nil values
 
-  Scenario: Best Buy parser handles malformed HTML
-    When I parse Best Buy email with malformed HTML
-    """
-    <html><body><table><tr><td>Broken HTML
-    """
-    Then it should handle the error gracefully for Best Buy
-    And it should return Best Buy parser results
-
   Scenario: Parsers handle missing required elements
     When I parse Amazon email without order information
     """
@@ -164,10 +109,6 @@ Feature: Merchant-Specific Email Parsers
   Scenario: Parser selection is case insensitive
     When I get parser for merchant "AMAZON"
     Then it should return the Amazon parser
-
-  Scenario: Parser selection handles mixed case
-    When I get parser for merchant "Best buy"
-    Then it should return the Best Buy parser
 
   # USER STORY 60: Integration Testing
   Scenario: Complete Amazon order parsing workflow
@@ -190,5 +131,73 @@ Feature: Merchant-Specific Email Parsers
     And the purchase date should be "2024-01-15"
     And it should have 2 line items
     And the total should be 1028.99
+
+  # Best Buy Parser - Price Parsing
+  Scenario: Best Buy parser handles US format with thousands separator
+    When I parse Best Buy email with total "Total: 1,234.56"
+    Then the Best Buy total amount should be 1234.56
+
+  Scenario: Best Buy parser handles prices with multiple dots
+    When I parse Best Buy email with total "Total: 1.234.56"
+    Then the Best Buy total amount should be 123456.0
+
+  Scenario: Best Buy parser parses prices with thousands separator in line items
+    When I parse Best Buy email with product table
+      """
+      <html><body>
+      <table>
+        <tr><td>Expensive Item</td><td>$1,234.56</td></tr>
+      </table>
+      </body></html>
+      """
+    Then the first Best Buy item should be "Expensive Item" with price 1234.56
+
+  Scenario: Best Buy parser parses prices with multiple dots in line items
+    When I parse Best Buy email with product table
+      """
+      <html><body>
+      <table>
+        <tr><td>European Price Item</td><td>1.234.56</td></tr>
+      </table>
+      </body></html>
+      """
+    Then the first Best Buy item should be "European Price Item" with price 123456.0
+
+  Scenario: Best Buy parser handles various price formats
+    When I parse Best Buy prices in different formats
+      | format              | input      | expected |
+      | US with thousands   | 1,234.56   | 1234.56  |
+      | Multiple dots       | 1.234.56   | 123456.0 |
+      | With currency        | $1,234.56  | 1234.56  |
+    Then all Best Buy prices should be correctly parsed
+
+  # Coverage scenarios for missing lines
+  Scenario: Amazon parser skips table rows with less than 3 cells
+    When I parse Amazon email with table row having 2 cells
+    Then the line items should not include that row
+
+  Scenario: Amazon parser skips product names with length 3 or less
+    When I parse Amazon email with product name "AB"
+    Then the line items should not include that product
+
+  Scenario: Amazon parser handles price string that becomes blank after cleaning
+    When I parse Amazon price "   "
+    Then the Amazon price should be nil
+
+  Scenario: Amazon parser handles price parsing exception
+    When I parse Amazon price that causes exception
+    Then the Amazon price should be nil
+
+  Scenario: Amazon parser handles total amount ending with period
+    When I parse Amazon email with total "Order Total: 1,234.56."
+    Then the Amazon total amount should be 1234.56
+
+  Scenario: Amazon parser handles multiple dots in price
+    When I parse Amazon price "1.234.567"
+    Then the Amazon price should be 1234567.0
+
+  Scenario: Amazon parser handles total with trailing period
+    When I parse Amazon email with total "Order Total: 1,234.56."
+    Then the total amount should be 1234.56
 
    

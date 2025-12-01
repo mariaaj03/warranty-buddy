@@ -26,11 +26,19 @@ Then("it should have default from {string}") do |from_address|
   expect(ApplicationMailer.default[:from]).to eq(from_address)
 end
 
+Then("it should be {string}") do |from_address|
+  expect(ApplicationMailer.default[:from]).to eq(from_address)
+end
+
 When("I check the layout") do
   # This step is just for documentation - the actual check is in the Then step
 end
 
 Then("it should have layout {string}") do |layout_name|
+  expect(ApplicationMailer._layout).to eq(layout_name)
+end
+
+Then("it should use {string} layout") do |layout_name|
   expect(ApplicationMailer._layout).to eq(layout_name)
 end
 

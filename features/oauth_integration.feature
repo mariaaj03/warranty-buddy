@@ -65,9 +65,9 @@ Feature: Google OAuth Integration
     And my Gmail data should be cleared from the session
 
   Scenario: OAuth callback raises an exception
-    As a user
-    I want to be handled gracefully when OAuth callback fails
-    So that I can retry authentication
+    As a system
+    I want to handle OAuth errors gracefully
+    So that users see a helpful error message
     Given the OAuth callback will raise an exception
     When I visit the OAuth callback URL
     Then I should be redirected to the root path

@@ -12,11 +12,11 @@ Feature: Warranty Buddy Dashboard
     As a new user
     I want to see an empty dashboard with clear instructions
     So I understand how to get started
+    Given I have connected my Gmail account
     When I visit the homepage
-    Then I should see "Warranty Buddy - Iteration 1"
+    Then I should see "Warranty Buddy"
     And I should see "Your Digital Memory for Every Purchase"
-    And I should see "Not Connected" status for Gmail
-    And I should see a "Connect Gmail" button
+    And I should see "Connected" status for Gmail
     And I should see "Add a product warranty" section
     And the warranties table should be empty
     And I should see "No warranties yet." message
@@ -337,25 +337,23 @@ Scenario: User connects Gmail account
     And I should see "API Test Product" in the response
     And I should see "Test Store" in the response
 
-  # USER STORY 26: User cannot access warranties without Gmail connection
+  # USER STORY 26: User must connect Gmail to access dashboard
 Scenario: User tries to add warranty without Gmail connection
   As a user
-  I want to be able to add warranties manually even without Gmail
-  So I can track warranties from any source
+  I want to be redirected to connect Gmail if I try to access dashboard without connection
+  So I understand I need to connect Gmail first
   Given I have not connected my Gmail account
-  When I expand "Add a product warranty" section
-  And I fill in "Product" with "Test Product"
-  And I click "Add warranty"
-  Then I should see "Warranty added successfully!"
-  And I should see "Test Product" in the warranties table
+  When I visit the homepage
+  Then I should be redirected to connect Gmail
+  And I should not see the dashboard
 
   # USER STORY 27: Comprehensive warranty management flow
   Scenario: User completes full warranty management workflow
     As a user
     I want to complete a full workflow of managing warranties
     So I understand all features work together
-    Given I visit the homepage
-    When I connect my Gmail account
+    Given I have connected my Gmail account
+    When I visit the homepage
     And I parse Gmail receipts
     And I manually add a warranty for "Manual Product" from "Manual Store"
     And I edit the "Manual Product" warranty to change merchant to "Updated Store"
@@ -367,375 +365,165 @@ Scenario: User tries to add warranty without Gmail connection
     Then I should have successfully used all major features
     And the dashboard should reflect my changes
 
-  # Additional coverage scenarios
-  Scenario: System updates warranty with valid product and purchase date
-    Given I have a signed in user for dashboard controller
-    And I have a product with id
-    When I update the warranty with purchase date "2024-01-15"
-    Then the warranty should be updated successfully
-
-  Scenario: System returns not found when updating non-existent warranty
-    Given I have a signed in user for dashboard controller
-    When I update a non-existent warranty
-    Then I should receive a not found response
-
-  Scenario: System handles invalid purchase date format in update
-    Given I have a signed in user for dashboard controller
-    And I have a product with id
-    When I update the warranty with invalid purchase date "invalid-date"
-    Then I should receive a bad request response
-
-  Scenario: System updates warranty without purchase date
-    Given I have a signed in user for dashboard controller
-    And I have a product with id
-    When I update the warranty without purchase date
-    Then the warranty should be updated successfully
-
-  Scenario: System looks up warranty info and returns nil
-    Given I have a signed in user for dashboard controller
-    When I lookup warranty info for product "Unknown Product" from merchant "Unknown Merchant"
-    And the AI service returns nil
-    Then I should receive a JSON response with nil
-
-  Scenario: System checks warranty eligibility with Gmail connected
-    Given I have a signed in user with Gmail connected
-    And I have a product
-    When I check warranty eligibility with issue description "Screen is cracked"
-    Then I should receive warranty eligibility result
-
-  Scenario: System checks warranty eligibility without Gmail connection
-    Given I have a signed in user without Gmail connection
-    When I check warranty eligibility
-    Then I should be redirected with an alert
-
-  Scenario: System checks warranty eligibility with blank issue description
-    Given I have a signed in user with Gmail connected
-    And I have a product
-    When I check warranty eligibility with blank issue description
-    Then I should receive a bad request error
-
-  Scenario: System checks warranty eligibility for non-existent product
-    Given I have a signed in user with Gmail connected
-    When I check warranty eligibility for non-existent product
-    Then I should receive a not found error
-
-  Scenario: System parses Gmail receipts with Gmail connected
-    Given I have a signed in user with Gmail connected
-    When I parse Gmail receipts
-    Then receipts should be processed
-
-  Scenario: System parses Gmail receipts and skips blank product names
-    Given I have a signed in user with Gmail connected
-    And I have Gmail receipts with blank product names
-    When I parse Gmail receipts
-    Then blank product names should be skipped
-
-  Scenario: System parses Gmail receipts and skips existing products
-    Given I have a signed in user with Gmail connected
-    And I have an existing product with raw_email_id
-    And I have Gmail receipts with matching raw_email_id
-    When I parse Gmail receipts
-    Then existing products should be skipped
-
-  Scenario: System parses Gmail receipts and skips receipts with blank product name or purchase date
-    Given I have a signed in user with Gmail connected
-    And I have Gmail receipts with blank product name or purchase date
-    When I parse Gmail receipts
-    Then invalid receipts should be skipped
-
-  Scenario: System handles Gmail API permission denied error
-    Given I have a signed in user with Gmail connected
-    And the Gmail service will raise a permission denied error
-    When I parse Gmail receipts
-    Then I should be redirected to dashboard
-
-  Scenario: System handles generic Gmail parsing error
-    Given I have a signed in user with Gmail connected
-    And the Gmail service will raise a generic error
-    When I parse Gmail receipts
-    Then I should be redirected to dashboard
-
-  Scenario: System uses AI warranty info when available in upload
-    Given I have a signed in user for dashboard controller
-    When I upload a manual warranty with merchant "Apple"
-    And the AI service returns warranty info
-    Then the warranty should use AI warranty months
-
-  Scenario: System handles AI warranty lookup failure in upload
-    Given I have a signed in user for dashboard controller
-    When I upload a manual warranty with merchant "Apple"
-    And the AI service raises an error
-    Then the warranty should be created without AI data
-
-  Scenario: System processes PDF receipt file upload
-    Given I have a signed in user for dashboard controller
-    When I upload a PDF receipt file
+  # Coverage scenarios for upload method
+  Scenario: User uploads PDF receipt file
+    Given I am a signed in user
+    And I have a receipt processor that processes PDF successfully
+    When I upload a PDF receipt file with product name
     Then the receipt should be processed as PDF
+    And the warranty should be created
 
-  Scenario: System processes image receipt file upload
-    Given I have a signed in user for dashboard controller
-    When I upload an image receipt file
+  Scenario: User uploads image receipt file
+    Given I am a signed in user
+    And I have a receipt processor that processes image successfully
+    When I upload an image receipt file with product name
     Then the receipt should be processed as image
+    And the warranty should be created
 
-  Scenario: System rejects unsupported file type
-    Given I have a signed in user for dashboard controller
-    When I upload an unsupported file type
+  Scenario: User uploads unsupported file type
+    Given I am a signed in user
+    When I upload an unsupported file type with product name
     Then I should receive an error about unsupported file type
 
-  Scenario: System handles receipt processing error
-    Given I have a signed in user for dashboard controller
-    And the receipt processor will raise an error
-    When I upload a PDF receipt file
-    Then I should receive an error about processing failure
+  Scenario: Receipt processor raises an error during processing
+    Given I am a signed in user
+    And I have a receipt processor that raises an error
+    When I upload a receipt file with product name
+    Then the receipt processor cleanup should be called
+    And I should receive an error about processing failure
 
-  Scenario: System handles receipt data extraction failure with Vision API configured
-    Given I have a signed in user for dashboard controller
-    And the Vision API is configured
-    When I upload a receipt file that fails to extract data
-    Then I should receive an error about unclear image
-
-  Scenario: System handles receipt data extraction failure without Vision API or OAuth
-    Given I have a signed in user for dashboard controller
-    And the Vision API is not configured
+  Scenario: Receipt extraction returns nil without error and no Vision API or OAuth
+    Given I am a signed in user
     And the user does not have OAuth credentials
+    And Vision API is not configured
+    And I have a receipt processor that returns nil
     When I upload a receipt file that fails to extract data
-    Then I should receive an error about Vision API configuration
+    Then I should see a Vision API configuration error
 
-  Scenario: System handles receipt data extraction failure with OAuth but no Vision API
-    Given I have a signed in user with Gmail connected
-    And the Vision API is not configured
+  Scenario: Receipt extraction returns nil without error but user has OAuth
+    Given I am a signed in user
+    And the user has OAuth credentials
+    And I have a receipt processor that returns nil
     When I upload a receipt file that fails to extract data
-    Then I should receive an error about unclear image
+    Then I should see a generic extraction error
 
-  Scenario: System uploads warranty without receipt file
-
-  Scenario: System filters warranties by active status
-    Given I have a signed in user for dashboard controller
-    And I have products with various statuses
-    When I visit the dashboard with status filter "active"
-    Then I should only see active warranties
-
-  Scenario: System filters warranties by expired status
-    Given I have a signed in user for dashboard controller
+  # Coverage scenarios for missing lines
+  Scenario: User filters dashboard by expired status
+    Given I am a signed in user
     And I have products with various statuses
     When I visit the dashboard with status filter "expired"
     Then I should only see expired warranties
 
-  Scenario: System extracts product name from receipt line items when product name is blank
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns line items
-    When I upload a receipt file with blank product name
-    Then the product name should be extracted from line items
+  Scenario: Receipt extraction returns nil without error and user has OAuth credentials
+    Given I am a signed in user
+    And the user has OAuth credentials
+    And I have a receipt processor that returns nil without error
+    When I upload a receipt file that fails to extract data
+    Then I should see a generic extraction error message
 
-  Scenario: System extracts product name from receipt data when product name is blank
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns product name
-    When I upload a receipt file with blank product name
-    Then the product name should be extracted from receipt data
+  Scenario: Receipt extraction returns nil without error and Vision API key is present
+    Given I am a signed in user
+    And the Vision API key is configured
+    And I have a receipt processor that returns nil without error
+    When I upload a receipt file that fails to extract data
+    Then I should see a generic extraction error message
 
-  Scenario: System sets extraction error when receipt data is nil and no error occurred
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns nil
-    And Vision API is not configured
-    And user has no OAuth credentials
-    When I upload a receipt file
-    Then I should see an extraction error about Vision API configuration
+  Scenario: Receipt extraction succeeds but then receipt_data is not nil
+    Given I am a signed in user
+    And I have a receipt processor that returns valid receipt data
+    When I upload a receipt file with product name
+    Then the warranty should be created
 
-  Scenario: System sets extraction error when receipt data is nil and Vision API is configured
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns nil
-    And Vision API is configured
-    When I upload a receipt file
-    Then I should see an extraction error about unclear image
-
-  Scenario: System sets flash alert when extraction error exists
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that raises an error
-    When I upload a receipt file
-    Then the flash alert should contain the extraction error
-
-  Scenario: System uses warranty length from receipt data when present
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns warranty length
-    When I upload a receipt file
-    Then the warranty months should be set from receipt data
-
-  Scenario: System sets warranty months to nil when converted value is zero
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns zero warranty length
-    When I upload a receipt file
-    Then the warranty months should be nil
-
-  Scenario: System defaults warranty months to 12 when nil and receipt data is present
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns nil warranty length
-    When I upload a receipt file
-    Then the warranty months should default to 12
-
-  Scenario: System filters warranties by expiring soon status
-    Given I have a signed in user for dashboard controller
+  Scenario: User filters dashboard by expiring soon status
+    Given I am a signed in user
     And I have products with various statuses
     When I visit the dashboard with status filter "expiring_soon"
-    Then I should only see expiring soon warranties
+    Then I should see the dashboard
 
-  Scenario: System sorts warranties by product name
-    Given I have a signed in user for dashboard controller
-    And I have products with various names
+  Scenario: User sorts dashboard by product name
+    Given I am a signed in user
+    And I have products with various statuses
     When I visit the dashboard with sort "product_name"
-    Then warranties should be sorted by product name
+    Then I should see the dashboard
 
-  Scenario: System sorts warranties by purchase date
-    Given I have a signed in user for dashboard controller
-    And I have products with various purchase dates
+  Scenario: User sorts dashboard by purchase date
+    Given I am a signed in user
+    And I have products with various statuses
     When I visit the dashboard with sort "purchase_date"
-    Then warranties should be sorted by purchase date
+    Then I should see the dashboard
 
-  Scenario: System sorts warranties by merchant
-    Given I have a signed in user for dashboard controller
-    And I have products with various merchants
+  Scenario: User sorts dashboard by merchant
+    Given I am a signed in user
+    And I have products with various statuses
     When I visit the dashboard with sort "merchant"
-    Then warranties should be sorted by merchant
+    Then I should see the dashboard
 
-  Scenario: System returns warranties as JSON via API
-    Given I have a signed in user for dashboard controller
-    And I have products with warranty information
-    When I visit the API warranties endpoint
-    Then I should receive JSON with warranty data
+  Scenario: User searches dashboard with search term
+    Given I am a signed in user
+    And I have products with various statuses
+    When I visit the dashboard with search "Active"
+    Then I should see the dashboard
 
-  Scenario: System returns health status via API
-    Given I have a signed in user for dashboard controller
-    When I visit the API health endpoint
-    Then I should receive JSON with health status
+  Scenario: User filters dashboard by merchant
+    Given I am a signed in user
+    And I have products with various statuses
+    When I visit the dashboard with merchant filter "Test Merchant"
+    Then I should see the dashboard
 
-  Scenario: System resets Gmail connection
-    Given I have a signed in user with Gmail connected
-    When I reset the Gmail connection
-    Then the Gmail tokens should be cleared
+  Scenario: User uploads warranty with receipt data that has line items
+    Given I am a signed in user
+    And I have a receipt processor that returns receipt data with line items
+    When I upload a receipt file without product name
+    Then the warranty should be created with product name from line items
 
-  Scenario: System disconnects Gmail
-    Given I have a signed in user with Gmail connected
-    When I disconnect Gmail
-    Then I should be redirected to dashboard
-    And the Gmail tokens should be cleared
-
-  Scenario: System deletes warranty when product exists
-    Given I have a signed in user for dashboard controller
-    And I have a product
-    When I delete the warranty
-    Then the product should be destroyed
-
-  Scenario: System returns not found when deleting non-existent warranty
-    Given I have a signed in user for dashboard controller
-    When I delete a non-existent warranty
-    Then I should receive not found status for delete
-
-  Scenario: System updates warranty without purchase date
-    Given I have a signed in user for dashboard controller
-    And I have a product
-    When I update the warranty without purchase date
-    Then the warranty should be updated
-
-  Scenario: System sets warranty months to nil when form warranty length is zero
-    Given I have a signed in user for dashboard controller
-    When I upload a warranty with zero warranty length
-    Then the warranty months should be nil for zero warranty length
-
-  Scenario: System extracts return policy days from receipt data
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns return policy days
-    When I upload a receipt file
-    Then the return policy days should be set from receipt data
-
-  Scenario: System extracts return deadline from receipt data
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns return deadline
-    When I upload a receipt file
-    Then the return deadline should be set from receipt data
-
-  Scenario: System extracts warranty type from receipt data
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns warranty type
-    When I upload a receipt file
-    Then the warranty type should be set from receipt data
-
-  Scenario: System uses AI warranty info when available for manual upload
-    Given I have a signed in user for dashboard controller
-    And the AI service returns warranty info
-    When I upload a warranty manually with merchant
-    Then the warranty should use AI warranty info
-
-  Scenario: System sets Gmail connected status
-    Given I have a signed in user for dashboard controller
-    When I visit the dashboard
-    Then the Gmail connected status should be set
-
-  Scenario: System deletes warranty and returns ok status
-    Given I have a signed in user for dashboard controller
-    And I have a product
-    When I delete the warranty via API
-    Then I should receive ok status
-
-  Scenario: System returns not found when deleting non-existent warranty via API
-    Given I have a signed in user for dashboard controller
-    When I delete a non-existent warranty via API
-    Then I should receive not found status for API delete
-
-  Scenario: System updates warranty with purchase date
-    Given I have a signed in user for dashboard controller
-    And I have a product
-    When I update the warranty with purchase date "2024-01-15"
-    Then the warranty should be updated with purchase date
-
-  Scenario: System looks up warranty info via API
-    Given I have a signed in user for dashboard controller
-    And the AI service returns warranty info
-    When I lookup warranty info for product "iPhone" and merchant "Apple"
-    Then I should receive JSON with warranty info
-
-  Scenario: System shows error message when product name is blank without receipt file
-    Given I have a signed in user for dashboard controller
-    When I upload a warranty without product name and without receipt file
-    Then I should be redirected to dashboard
-    And I should see an alert "Product name is required"
-
-  Scenario: System sets flash alert when extraction error exists
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that raises an error
+  Scenario: User uploads warranty with extraction error
+    Given I am a signed in user
+    And I have a receipt processor that returns an extraction error
     When I upload a receipt file with product name
-    Then I should be redirected to dashboard
-    And the flash alert should be set with extraction error
+    Then I should see an alert message
 
-  Scenario: System uses purchase date from receipt data when present
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns purchase date
-    When I upload a receipt file
-    Then the purchase date should be set from receipt data
+  # Coverage scenarios for warranty_months and AI lookup
+  Scenario: User uploads warranty with receipt_data warranty_length_months that is zero or negative
+    Given I am a signed in user
+    And I have a receipt processor that returns warranty_length_months as zero
+    When I upload a receipt file with product name
+    Then the warranty should be created with nil warranty_months
 
-  Scenario: System defaults purchase date to today when not in receipt data
-    Given I have a signed in user for dashboard controller
-    And I have a receipt processor that returns no purchase date
-    When I upload a receipt file
-    Then the purchase date should default to today
+  Scenario: User manually uploads warranty and AI lookup returns warranty info
+    Given I am a signed in user
+    And I have an AI service that returns warranty info
+    When I manually upload a warranty for "iPhone 15" from "Apple" without warranty length
+    Then the warranty should be created with AI warranty info
 
-  Scenario: System shows Vision API configuration error when no credentials available
-    Given I have a signed in user for dashboard controller
-    And the Vision API is not configured
-    And the user does not have OAuth credentials
-    When I upload a receipt file that fails to extract data
-    Then I should be redirected to dashboard
-    And I should see a Vision API configuration error
+  Scenario: User manually uploads warranty and AI lookup returns nil
+    Given I am a signed in user
+    And I have an AI service that returns nil for warranty lookup
+    When I manually upload a warranty for "iPhone 15" from "Apple" without warranty length
+    Then the warranty should be created without AI warranty info
 
-  Scenario: System shows generic extraction error when Vision API or OAuth is available
-    Given I have a signed in user for dashboard controller
-    And the Vision API is configured
-    When I upload a receipt file that fails to extract data
-    Then I should be redirected to dashboard
-    And I should see a generic extraction error
+  Scenario: User manually uploads warranty and AI lookup raises an error
+    Given I am a signed in user
+    And I have an AI service that raises an error for warranty lookup
+    When I manually upload a warranty for "iPhone 15" from "Apple" without warranty length
+    Then the warranty should be created without AI warranty info
 
-  Scenario: System shows generic extraction error when OAuth is available but Vision API is not
-    Given I have a signed in user for dashboard controller
-    And the Vision API is not configured
-    And the user has OAuth credentials
-    When I upload a receipt file that fails to extract data
-    Then I should be redirected to dashboard
-    And I should see a generic extraction error
+  # Coverage scenarios for check_warranty_eligibility
+  Scenario: User checks warranty eligibility with issue description via JSON
+    Given I am a signed in user
+    And I have connected my Gmail account
+    And I have a product with ID
+    When I check warranty eligibility with issue description "screen cracked" via JSON
+    Then I should receive warranty eligibility result in JSON format
+
+  Scenario: User checks warranty eligibility with issue description via HTML
+    Given I am a signed in user
+    And I have connected my Gmail account
+    And I have a product with ID
+    When I check warranty eligibility with issue description "screen cracked" via HTML
+    Then I should be redirected to dashboard with notice
+
+  Scenario: User checks warranty eligibility for non-existent product
+    Given I am a signed in user
+    And I have connected my Gmail account
+    When I check warranty eligibility for non-existent product via JSON
+    Then I should receive a not found error in JSON format

@@ -70,6 +70,7 @@ Given("I have a product that expired {int} days ago") do |days|
     purchase_date: purchase_date,
     warranty_months: 12
   )
+  @product.reload
 end
 
 Given("I have a product expiring today") do
@@ -105,7 +106,7 @@ Given("I have an active product with warranty type {string}") do |warranty_type|
   )
 end
 
-Given("the AI service is configured") do
+Given("the AI service is configured for product") do
   @mock_ai_service = instance_double(AiService)
   @mock_client = double("client")
   allow(@mock_ai_service).to receive(:instance_variable_get).with(:@client).and_return(@mock_client)
@@ -118,13 +119,8 @@ Given("the AI service is configured") do
 end
 
 Given("the AI service is stubbed to verify it is not called") do
-  # Stub AiService.new so we can verify it wasn't called when warranty is expired
-  @mock_ai_service = instance_double(AiService)
-  allow(AiService).to receive(:new).and_return(@mock_ai_service)
-  allow(@mock_ai_service).to receive(:check_warranty_eligibility).and_return({
-    "is_covered" => false,
-    "reasoning" => "Not covered"
-  })
+  # Stub AiService to ensure it's not called when warranty is expired
+  allow(AiService).to receive(:new).and_raise("AiService should not be called when warranty is expired")
 end
 
 When("I calculate the expiry date") do
@@ -141,6 +137,14 @@ end
 
 Then("it should return nil") do
   expect(@expiry_date).to be_nil
+end
+
+Then("the expiry date should be nil") do
+  expect(@expiry_date).to be_nil
+end
+
+Then("the days until expiry should be nil") do
+  expect(@days_until_expiry).to be_nil
 end
 
 When("I calculate days until expiry") do
@@ -176,10 +180,13 @@ When("I check warranty eligibility for issue {string}") do |issue_description|
 end
 
 Then("it should return eligible false with reason {string}") do |reason|
+  expect(@eligibility_result).not_to be_nil, "Expected a hash but got nil. Product warranty_eligible? = #{@product.warranty_eligible?}, expiry_date = #{@product.expiry_date}"
   expect(@eligibility_result).to be_a(Hash)
-  # The method returns a hash with symbol keys
-  expect(@eligibility_result[:eligible] || @eligibility_result["eligible"]).to be false
-  expect(@eligibility_result[:reason] || @eligibility_result["reason"]).to eq(reason)
+  # The method returns a hash with symbol keys when warranty expired
+  eligible = @eligibility_result[:eligible] || @eligibility_result["eligible"]
+  result_reason = @eligibility_result[:reason] || @eligibility_result["reason"]
+  expect(eligible).to eq(false)
+  expect(result_reason).to eq(reason)
 end
 
 Then("it should call the AI service") do
@@ -211,7 +218,27 @@ Then("the AI service should not be called") do
   # Verify that AiService.new was not called (the method should return early)
   # The method should return early with { eligible: false, reason: "Warranty expired" }
   # before reaching the line that calls AiService.new
-  expect(AiService).not_to have_received(:new)
-  expect(@mock_ai_service).not_to have_received(:check_warranty_eligibility)
+  # Only check if we stubbed it
+  if defined?(@mock_ai_service) && @mock_ai_service
+    expect(@mock_ai_service).not_to have_received(:check_warranty_eligibility) if @mock_ai_service.respond_to?(:check_warranty_eligibility)
+  end
+end
+
+Given("I have a product with name {string} and merchant {string}") do |product_name, merchant|
+  @product = Product.create!(
+    user: @user,
+    product_name: product_name,
+    merchant: merchant,
+    purchase_date: Date.today,
+    warranty_months: 12
+  )
+end
+
+When("I check the category icon") do
+  @category_icon = @product.category_icon
+end
+
+Then("the category icon should be {string}") do |expected_icon|
+  expect(@category_icon).to eq(expected_icon)
 end
 

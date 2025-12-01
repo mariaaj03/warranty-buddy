@@ -37,42 +37,48 @@ Feature: Google Calendar Integration
 
   Scenario: Service handles complete calendar API failure
     Given I have an authenticated calendar service
-    And the Calendar API is unavailable
+    And the Calendar API is unavailable for calendar service
     When I export warranties to calendar
     Then it should return failure status
     And it should include error message
     And it should log the calendar error
 
-  # Additional coverage scenarios
-  Scenario: Service skips products without expiry date
+  # Coverage scenarios for export_warranties method
+  Scenario: Service successfully creates calendar events for products with expiry dates
     Given I have an authenticated calendar service
-    And I have products with and without expiry dates
+    And I have products with expiry dates for export
+    And the Calendar API will successfully create events
     When I export warranties to calendar
-    Then it should only create events for products with expiry dates
-    And it should skip products without expiry dates
+    Then events should be created successfully
+    And the service should log successful event creation
+
+  Scenario: Service skips products without expiry dates
+    Given I have an authenticated calendar service
+    And I have products with and without expiry dates for calendar export
+    And the Calendar API will successfully create events
+    When I export warranties to calendar
+    Then only products with expiry dates should have events created
+
+  Scenario: Service handles errors when creating individual events
+    Given I have an authenticated calendar service
+    And I have products with expiry dates for export
+    And the Calendar API will fail for some events
+    When I export warranties to calendar
+    Then the export should succeed with partial errors
+    And errors should be collected for failed products
 
   Scenario: Service handles insufficient authentication scopes error
     Given I have an authenticated calendar service
+    And I have products with expiry dates for export
     And the Calendar API will raise insufficient scopes error
     When I export warranties to calendar
-    Then it should return a user-friendly error message
-    And it should log the error with backtrace
+    Then the error message should indicate calendar permissions issue
+    And the service should log the error with backtrace
 
-  Scenario: Service builds description with all product fields
+  Scenario: Service handles generic errors when creating events
     Given I have an authenticated calendar service
-    And I have a product with all fields populated
+    And I have products with expiry dates for export
+    And the Calendar API will raise a generic error
     When I export warranties to calendar
-    Then the event description should include all product information
-
-  Scenario: Service builds description with minimal product fields
-    Given I have an authenticated calendar service
-    And I have a product with only product name
-    When I export warranties to calendar
-    Then the event description should include only product name
-
-  Scenario: Service creates reminder with zero days
-    Given I have an authenticated calendar service
-    And I have products with warranty expirations
-    When I export warranties to calendar with reminder days "0, 7"
-    Then it should create reminders with correct minutes
-    And the zero day reminder should have 0 minutes
+    Then the error message should be the original error message
+    And the service should log the error with backtrace

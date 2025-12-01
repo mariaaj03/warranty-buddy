@@ -1,5 +1,23 @@
 # ProductsController step definitions
 
+Given("I have warranties in the system") do
+  @user = User.find_by(email: 'test@example.com') || User.create!(
+    email: 'test@example.com',
+    password: 'password123',
+    password_confirmation: 'password123'
+  )
+  @user.products.create!(
+    product_name: "iPhone 15 Pro",
+    merchant: "Apple",
+    purchase_date: Date.today - 6.months,
+    warranty_months: 12
+  )
+end
+
+When("I export warranties to iCal") do
+  visit "/products/calendar"
+end
+
 Given("I have a signed in user for products controller") do
   @user = User.create!(
     email: 'test@example.com',
@@ -40,16 +58,13 @@ Given("I have products with and without expiry dates") do
   )
 end
 
-Given("I have products without expiry dates") do
-  @user.products.create!(
-    product_name: "Product 1",
-    merchant: "Store",
-    purchase_date: nil,
-    warranty_months: nil
-  )
-end
-
 Given("I have a Gmail connected user") do
+  # Ensure @user exists
+  @user ||= User.find_by(email: 'test@example.com') || User.create!(
+    email: 'test@example.com',
+    password: 'password123',
+    password_confirmation: 'password123'
+  )
   @user.update!(
     provider: 'google_oauth2',
     uid: "test_uid_#{SecureRandom.hex(4)}",
@@ -59,6 +74,12 @@ Given("I have a Gmail connected user") do
 end
 
 Given("I have a user without Gmail connection") do
+  # Ensure @user exists
+  @user ||= User.find_by(email: 'test@example.com') || User.create!(
+    email: 'test@example.com',
+    password: 'password123',
+    password_confirmation: 'password123'
+  )
   @user.update!(
     provider: nil,
     uid: nil,
@@ -67,7 +88,52 @@ Given("I have a user without Gmail connection") do
   )
 end
 
+Given("I have products without expiry dates") do
+  # Ensure @user exists
+  @user ||= User.find_by(email: 'test@example.com') || User.create!(
+    email: 'test@example.com',
+    password: 'password123',
+    password_confirmation: 'password123'
+  )
+  # Create products without expiry dates (no warranty_months or purchase_date)
+  @user.products.create!(
+    product_name: "Product Without Expiry",
+    merchant: "Store",
+    purchase_date: nil,
+    warranty_months: nil
+  )
+  @user.products.create!(
+    product_name: "Another Product",
+    merchant: "Store",
+    purchase_date: Date.today,
+    warranty_months: nil
+  )
+end
+
+When("I try to export warranties to Google Calendar") do
+  # Make POST request
+  response = page.driver.post "/products/export_to_google_calendar"
+  
+  # Follow redirect if present
+  if response.status == 302 && response.location
+    visit response.location
+  else
+    visit dashboard_path
+  end
+end
+
+When("I visit the calendar export URL with reminders as non-array {string}") do |reminders|
+  # Pass reminders as a query parameter (which will be a String, not Array)
+  visit "/products/calendar?reminders=#{reminders}"
+end
+
 Given("I have products with warranty expirations") do
+  # Ensure @user exists
+  @user ||= User.find_by(email: 'test@example.com') || User.create!(
+    email: 'test@example.com',
+    password: 'password123',
+    password_confirmation: 'password123'
+  )
   @user.products.create!(
     product_name: "Product 1",
     merchant: "Store",
@@ -121,7 +187,15 @@ When("I export warranties to Google Calendar") do
     })
   end
   
-  page.driver.post "/products/export_to_google_calendar"
+  # Make POST request
+  response = page.driver.post "/products/export_to_google_calendar"
+  
+  # Follow redirect if present (flash message is only available during redirect)
+  if response.status == 302 && response.location
+    visit response.location
+  else
+    visit dashboard_path
+  end
 end
 
 When("I export warranties to Google Calendar with reminders {string}") do |reminders|
@@ -181,9 +255,7 @@ Then("only products with expiry dates should be included") do
   expect(body.scan(/Warranty expires:/).count).to eq(products_with_expiry.count)
 end
 
-Then("I should be redirected to dashboard") do
-  expect(current_path).to eq(dashboard_path)
-end
+# Step definition for "I should be redirected to dashboard" is in dashboard_steps.rb
 
 Then("I should see a success message") do
   expect(page).to have_content("Successfully exported")
@@ -217,16 +289,19 @@ Then("the calendar should contain alarm triggers with timezone") do
   expect(body).to include("BEGIN:VALARM")
   expect(body).to include("ACTION:DISPLAY")
   expect(body).to include("Warranty expiring soon:")
-  expect(body).to include("TZID:America/New_York")
+  # Check for timezone in TRIGGER line (format: TRIGGER;TZID=America/New_York:...)
+  expect(body).to match(/TRIGGER[^:]*TZID=America\/New_York/i)
 end
 
 Given("the calendar export will succeed with no errors") do
   @mock_calendar_service = instance_double(GoogleCalendarService)
   allow(GoogleCalendarService).to receive(:new).with(@user).and_return(@mock_calendar_service)
   
+  # Count products with expiry dates
+  products_count = @user.products.select { |p| p.expiry_date.present? }.count
   allow(@mock_calendar_service).to receive(:export_warranties).and_return({
     success: true,
-    created: 2,
+    created: products_count,
     errors: []
   })
 end
@@ -235,9 +310,11 @@ Given("the calendar export will succeed with errors") do
   @mock_calendar_service = instance_double(GoogleCalendarService)
   allow(GoogleCalendarService).to receive(:new).with(@user).and_return(@mock_calendar_service)
   
+  # Count products with expiry dates
+  products_count = @user.products.select { |p| p.expiry_date.present? }.count
   allow(@mock_calendar_service).to receive(:export_warranties).and_return({
     success: true,
-    created: 1,
+    created: products_count,
     errors: ["Product 1: Some error occurred", "Product 2: Another error"]
   })
 end

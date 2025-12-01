@@ -43,16 +43,45 @@ class ReceiptProcessor
 
       regex_result = parse_receipt_text_first(text)
       
+      # If AI says it's not a receipt, use regex result
+      if ai_result && ai_result["is_receipt"] != true
+        return regex_result if regex_result
+      end
+      
+      # If AI says it's a receipt, compare with regex
       if ai_result && ai_result["is_receipt"] == true
-        if regex_result && regex_result[:line_items]&.any? && regex_result[:product_name].present?
-          if is_valid_product_name(ai_result["product_name"]) && !is_valid_product_name(regex_result[:product_name])
+        # If regex has no line items or product name, use AI
+        if !regex_result || regex_result[:line_items].blank? || regex_result[:product_name].blank?
+          return format_ai_result(ai_result)
+        end
+        
+        # Both have results, compare quality
+        regex_product_name = regex_result[:product_name]
+        ai_product_name = ai_result["product_name"]
+        
+        # Use regex if it has a valid product name and AI doesn't
+        if is_valid_product_name(regex_product_name) && !is_valid_product_name(ai_product_name)
+          return regex_result
+        end
+        
+        # Use AI if it has valid product name and regex doesn't
+        if is_valid_product_name(ai_product_name) && !is_valid_product_name(regex_product_name)
             return format_ai_result(ai_result)
+        end
+        
+        # Both valid - prefer regex if it seems better (longer/more descriptive)
+        if is_valid_product_name(regex_product_name) && is_valid_product_name(ai_product_name)
+          # Use regex if it's longer/more descriptive
+          if regex_product_name.length > (ai_product_name&.length || 0)
+            return regex_result
           end
         end
         
+        # Default to AI result if it says it's a receipt
         return format_ai_result(ai_result)
       end
       
+      # Fallback to regex result (when no AI result or AI is nil)
       regex_result
     rescue => e
       if e.message.include?("PERMISSION_DENIED") || e.message.include?("insufficient authentication scopes")

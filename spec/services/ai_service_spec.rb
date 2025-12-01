@@ -49,6 +49,24 @@ RSpec.describe AiService do
         expect(service.extract_receipt_info("x")["product_name"]).to eq("Phone")
       end
 
+      it "strips ```json with leading whitespace" do
+        json = "```json   \n{\"is_receipt\":true,\"product_name\":\"Phone\"}\n```"
+        allow(service).to receive(:call_gemini_api).and_return(json)
+        expect(service.extract_receipt_info("x")["product_name"]).to eq("Phone")
+      end
+
+      it "strips trailing ``` with whitespace" do
+        json = "{\"is_receipt\":true,\"product_name\":\"Phone\"}\n```   "
+        allow(service).to receive(:call_gemini_api).and_return(json)
+        expect(service.extract_receipt_info("x")["product_name"]).to eq("Phone")
+      end
+
+      it "handles JSON without markdown fences" do
+        json = "{\"is_receipt\":true,\"product_name\":\"Phone\",\"merchant\":\"Apple\",\"purchase_date\":\"2024-05-01\"}"
+        allow(service).to receive(:call_gemini_api).and_return(json)
+        expect(service.extract_receipt_info("x")["product_name"]).to eq("Phone")
+      end
+
       it "returns nil when AI says not a receipt" do
         allow(service).to receive(:call_gemini_api).and_return(%({"is_receipt":false}))
         expect(service.extract_receipt_info("x")).to be_nil
@@ -67,6 +85,13 @@ RSpec.describe AiService do
         expect(out["standard_warranty_months"]).to eq(12)
       end
 
+      it "strips markdown code blocks from lookup response" do
+        json = "```json\n{\"standard_warranty_months\":12}\n```"
+        allow(service).to receive(:call_gemini_api).and_return(json)
+        out = service.lookup_warranty_info("Phone", "Apple")
+        expect(out["standard_warranty_months"]).to eq(12)
+      end
+
       it "rescues on JSON error and returns nil" do
         allow(service).to receive(:call_gemini_api).and_return("bad")
         expect(service.lookup_warranty_info("x")).to be_nil
@@ -76,6 +101,13 @@ RSpec.describe AiService do
     describe "#check_warranty_eligibility" do
       it "parses JSON result" do
         allow(service).to receive(:call_gemini_api).and_return(%({"is_covered":true,"reasoning":"ok"}))
+        out = service.check_warranty_eligibility("Phone", "screen cracked", "1yr")
+        expect(out["is_covered"]).to eq(true)
+      end
+
+      it "strips markdown code blocks from eligibility response" do
+        json = "```json\n{\"is_covered\":true,\"reasoning\":\"ok\"}\n```"
+        allow(service).to receive(:call_gemini_api).and_return(json)
         out = service.check_warranty_eligibility("Phone", "screen cracked", "1yr")
         expect(out["is_covered"]).to eq(true)
       end
@@ -90,6 +122,13 @@ RSpec.describe AiService do
       it "returns parsed result when AI says is_receipt=true" do
         allow(service).to receive(:call_gemini_api_with_image)
           .and_return(%({"is_receipt":true,"product_name":"Mug","merchant":"Target","purchase_date":"2024-02-02"}))
+        out = service.extract_receipt_info_from_image("BASE64")
+        expect(out["product_name"]).to eq("Mug")
+      end
+
+      it "strips markdown code blocks from image response" do
+        json = "```json\n{\"is_receipt\":true,\"product_name\":\"Mug\",\"merchant\":\"Target\",\"purchase_date\":\"2024-02-02\"}\n```"
+        allow(service).to receive(:call_gemini_api_with_image).and_return(json)
         out = service.extract_receipt_info_from_image("BASE64")
         expect(out["product_name"]).to eq("Mug")
       end
@@ -112,6 +151,18 @@ RSpec.describe AiService do
         expect(out).to eq("hello")
       end
 
+      it "returns fallback message when response_text is nil" do
+        allow(service).to receive(:call_gemini_api).and_return(nil)
+        out = service.answer_warranty_question("What is coverage?")
+        expect(out).to eq("I'm sorry, I couldn't generate a response. Please try rephrasing your question.")
+      end
+
+      it "returns fallback message when response_text is empty" do
+        allow(service).to receive(:call_gemini_api).and_return("")
+        out = service.answer_warranty_question("What is coverage?")
+        expect(out).to eq("I'm sorry, I couldn't generate a response. Please try rephrasing your question.")
+      end
+
       it "raises if underlying call_gemini_api raises" do
         allow(service).to receive(:call_gemini_api).and_raise(StandardError.new("fail"))
         expect { service.answer_warranty_question("Q") }.to raise_error(StandardError)
@@ -126,6 +177,34 @@ RSpec.describe AiService do
           expect(prompt).to include("Relevant information from web search")
           expect(prompt).to include("Doc1")
           expect(prompt).to include("u2")
+          "ok"
+        end
+        service.answer_warranty_question("Q", results)
+      end
+
+      it "does not add search context when search_results is nil" do
+        expect(service).to receive(:call_gemini_api) do |prompt|
+          expect(prompt).not_to include("Relevant information from web search")
+          "ok"
+        end
+        service.answer_warranty_question("Q", nil)
+      end
+
+      it "does not add search context when search_results is empty" do
+        expect(service).to receive(:call_gemini_api) do |prompt|
+          expect(prompt).not_to include("Relevant information from web search")
+          "ok"
+        end
+        service.answer_warranty_question("Q", [])
+      end
+
+      it "limits search results to first 5 items" do
+        results = (1..7).map { |i| { title: "Doc#{i}", snippet: "S#{i}", url: "u#{i}" } }
+        expect(service).to receive(:call_gemini_api) do |prompt|
+          expect(prompt).to include("Doc1")
+          expect(prompt).to include("Doc5")
+          expect(prompt).not_to include("Doc6")
+          expect(prompt).not_to include("Doc7")
           "ok"
         end
         service.answer_warranty_question("Q", results)
@@ -191,18 +270,6 @@ RSpec.describe AiService do
       end
     end
 
-    describe "#extract_retry_delay (private)" do
-      it "extracts seconds from RetryInfo detail like '2s'" do
-        data = { "error" => { "details" => [{ "@type" => "type.googleapis.com/google.rpc.RetryInfo", "retryDelay" => "2s" }] } }
-        expect(service.send(:extract_retry_delay, data)).to eq(2.0)
-      end
-
-      it "returns nil for invalid/missing formats" do
-        expect(service.send(:extract_retry_delay, {})).to be_nil
-        data = { "error" => { "details" => [{ "@type" => "x", "retryDelay" => "weird" }] } }
-        expect(service.send(:extract_retry_delay, data)).to be_nil
-      end
-    end
   end
 
   context "with no client (no API key)" do

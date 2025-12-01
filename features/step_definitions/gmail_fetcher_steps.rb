@@ -155,6 +155,10 @@ Then("it should return an empty string") do
   expect(@result).to eq("")
 end
 
+Then("the HTML extraction should return an empty string") do
+  expect(@result).to eq("")
+end
+
 Given("I have a message with text in body") do
   @mock_body = double("Body", data: Base64.urlsafe_encode64("Plain text content"))
   @mock_payload = double("Payload", body: @mock_body, parts: nil)
@@ -254,6 +258,10 @@ Then("it should return an empty array") do
   expect(@result).to eq([])
 end
 
+Then("the Gmail fetcher should return an empty array") do
+  expect(@result).to eq([])
+end
+
 Given("I have URL-safe base64 encoded data") do
   @encoded_data = Base64.urlsafe_encode64("Test content")
 end
@@ -328,6 +336,7 @@ When("I list messages with max results {int}") do |max_results|
   @result = @fetcher.send(:list_messages, "me", "test", max_results)
 end
 
+
 Then("it should return at most {int} messages") do |max_results|
   expect(@result.length).to be <= max_results
 end
@@ -361,6 +370,183 @@ Given("I have a message with HTML body without html tag") do
   @mock_payload = double("Payload", body: @mock_body, parts: [@mock_html_part])
   @mock_message = double("Message", payload: @mock_payload)
   @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+# New step definitions for coverage scenarios
+Given("I have a message with HTML in body data") do
+  @mock_body = double("Body", data: Base64.urlsafe_encode64("<html><body>Test HTML Content</body></html>"))
+  @mock_payload = double("Payload", body: @mock_body, parts: nil)
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a message with body data that is not HTML") do
+  @mock_body = double("Body", data: Base64.urlsafe_encode64("Plain text content"))
+  @mock_html_part = double("Part",
+    mime_type: "text/html",
+    body: double("Body", data: Base64.urlsafe_encode64("<html><body>Test</body></html>")),
+    parts: nil
+  )
+  @mock_payload = double("Payload", body: @mock_body, parts: [@mock_html_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("the message has HTML parts") do
+  # Already set up in the previous step
+end
+
+Given("the Gmail message has HTML parts") do
+  # Already set up in the previous step
+end
+
+Then("it should return the HTML content from body") do
+  expect(@result).to include("Test HTML Content")
+end
+
+Then("it should return the HTML content from parts") do
+  expect(@result).to include("<html>")
+end
+
+Then("the Gmail fetcher should return the HTML content from body") do
+  expect(@result).to include("Test HTML Content")
+end
+
+Then("the Gmail fetcher should return the HTML content from parts") do
+  expect(@result).to include("<html>")
+end
+
+Given("I have a message with HTML in parts but no body data") do
+  @mock_html_body = double("Body", data: Base64.urlsafe_encode64("<html><body>Test</body></html>"))
+  @mock_html_part = double("Part",
+    mime_type: "text/html",
+    body: @mock_html_body,
+    parts: nil
+  )
+  @mock_payload = double("Payload", body: nil, parts: [@mock_html_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a Gmail message with HTML in parts but no body data") do
+  @mock_html_body = double("Body", data: Base64.urlsafe_encode64("<html><body>Test</body></html>"))
+  @mock_html_part = double("Part",
+    mime_type: "text/html",
+    body: @mock_html_body,
+    parts: nil
+  )
+  @mock_payload = double("Payload", body: nil, parts: [@mock_html_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a message with no body data and no parts") do
+  @mock_payload = double("Payload", body: nil, parts: nil)
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+# New step definitions for coverage scenarios
+Given("I have a message with text in nested parts") do
+  @mock_text_body = double("Body", data: Base64.urlsafe_encode64("Nested plain text content"))
+  @mock_text_part = double("Part",
+    mime_type: "text/plain",
+    body: @mock_text_body,
+    parts: nil
+  )
+  @mock_nested_part = double("Part",
+    mime_type: "multipart/alternative",
+    body: nil,
+    parts: [@mock_text_part]
+  )
+  @mock_payload = double("Payload", body: nil, parts: [@mock_nested_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a message with text part but no body data") do
+  @mock_text_part = double("Part",
+    mime_type: "text/plain",
+    body: nil,
+    parts: nil
+  )
+  @mock_payload = double("Payload", body: nil, parts: [@mock_text_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Then("it should return the text content from nested parts") do
+  expect(@result).to include("Nested plain text")
+end
+
+Given("I have a message with attachment in nested parts") do
+  @mock_attachment_body = double("Body", attachment_id: "att_nested_123")
+  @mock_attachment_part = double("Part",
+    filename: "nested_receipt.pdf",
+    body: @mock_attachment_body,
+    mime_type: "application/pdf",
+    parts: nil
+  )
+  @mock_nested_part = double("Part",
+    filename: nil,
+    body: nil,
+    parts: [@mock_attachment_part]
+  )
+  @mock_payload = double("Payload", parts: [@mock_nested_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a message with part that has filename but no attachment_id") do
+  @mock_body_no_attachment = double("Body", attachment_id: nil)
+  @mock_part = double("Part",
+    filename: "test.pdf",
+    body: @mock_body_no_attachment,
+    mime_type: "application/pdf",
+    parts: nil
+  )
+  @mock_payload = double("Payload", parts: [@mock_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Then("it should return all attachments including nested ones") do
+  expect(@result).to be_an(Array)
+  expect(@result.length).to eq(1)
+  expect(@result.first[:filename]).to eq("nested_receipt.pdf")
+  expect(@result.first[:attachment_id]).to eq("att_nested_123")
+end
+
+Given("the message has HTML parts") do
+  # Parts are already set in the previous step
+end
+
+Given("I have a message with HTML in parts but no body data") do
+  @mock_html_body = double("Body", data: Base64.urlsafe_encode64("<html><body>HTML from parts</body></html>"))
+  @mock_html_part = double("Part",
+    mime_type: "text/html",
+    body: @mock_html_body,
+    parts: nil
+  )
+  @mock_payload = double("Payload", body: nil, parts: [@mock_html_part])
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have a message with no body data and no parts") do
+  @mock_payload = double("Payload", body: nil, parts: nil)
+  @mock_message = double("Message", payload: @mock_payload)
+  @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Then("it should return the HTML content from body") do
+  expect(@result).to include("<html>")
+  expect(@result).to include("Test HTML Content")
+end
+
+Then("it should return the HTML content from parts") do
+  expect(@result).to include("<html>")
+  expect(@result).to include("HTML from parts")
 end
 
 Then("it should search in parts") do
@@ -411,5 +597,23 @@ Given("I have a message with text in deeply nested parts") do
   @mock_payload = double("Payload", body: nil, parts: [@mock_nested_part])
   @mock_message = double("Message", payload: @mock_payload)
   @fetcher = GmailFetcher.new("test_token") unless @fetcher
+end
+
+Given("I have Gmail credentials") do
+  @access_token = "test_access_token"
+  # Don't require Gmail API constants - just create the fetcher directly
+  @fetcher = GmailFetcher.new(@access_token)
+end
+
+When("I list Gmail messages") do
+  @mock_messages = [double("Message", id: "msg1")]
+  @mock_result = double("ListMessagesResponse", messages: @mock_messages, next_page_token: nil)
+  allow(@mock_service).to receive(:list_user_messages).and_return(@mock_result)
+  @fetcher.instance_variable_set(:@service, @mock_service)
+  @result = @fetcher.list_order_messages("me", 100)
+end
+
+Then("it should return message list") do
+  expect(@result).to be_an(Array)
 end
 

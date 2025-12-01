@@ -15,8 +15,18 @@ RSpec.describe MerchantParsers do
       expect(parser).to eq(MerchantParsers::BestBuyParser)
     end
 
+    it 'returns the BestBuyParser for "best buy" (lowercase)' do
+      parser = described_class.get_parser('best buy')
+      expect(parser).to eq(MerchantParsers::BestBuyParser)
+    end
+
     it 'returns the GenericParser for unknown merchants' do
       parser = described_class.get_parser('Unknown Merchant')
+      expect(parser).to eq(MerchantParsers::GenericParser)
+    end
+
+    it 'returns the GenericParser for nil merchant' do
+      parser = described_class.get_parser(nil)
       expect(parser).to eq(MerchantParsers::GenericParser)
     end
   end
@@ -46,6 +56,19 @@ RSpec.describe MerchantParsers::AmazonParser do
   end
 
   describe '.extract_total_amount' do
+    it 'extracts total with US format thousands separator' do
+      doc = Nokogiri::HTML(html_content)
+      text = "Order Total: $1,234.56"
+      result = described_class.send(:extract_total_amount, doc, text)
+      expect(result).to eq(1234.56)
+    end
+
+    it 'extracts total with multiple dots' do
+      doc = Nokogiri::HTML(html_content)
+      text = "Total: 1.234.56"
+      result = described_class.send(:extract_total_amount, doc, text)
+      expect(result).to eq(123456.0)
+    end
 
     it 'returns nil if no total amount is found' do
       doc = Nokogiri::HTML(html_content)
@@ -77,10 +100,78 @@ RSpec.describe MerchantParsers::AmazonParser do
       )
     end
 
+    it 'parses prices with thousands separator in line items' do
+      html = <<-HTML
+        <html>
+          <body>
+            <table>
+              <tr><td>Expensive Item</td><td>1</td><td>$1,234.56</td></tr>
+            </table>
+          </body>
+        </html>
+      HTML
+      doc = Nokogiri::HTML(html)
+      result = described_class.send(:extract_line_items, doc)
+      expect(result.first[:price]).to eq(1234.56)
+    end
+
+    it 'parses prices with multiple dots in line items' do
+      html = <<-HTML
+        <html>
+          <body>
+            <table>
+              <tr><td>European Price</td><td>1</td><td>1.234.56</td></tr>
+            </table>
+          </body>
+        </html>
+      HTML
+      doc = Nokogiri::HTML(html)
+      result = described_class.send(:extract_line_items, doc)
+      expect(result.first[:price]).to eq(123456.0)
+    end
+
     it 'returns an empty array if no line items are found' do
       doc = Nokogiri::HTML("<html><body>No items here.</body></html>")
       result = described_class.send(:extract_line_items, doc)
       expect(result).to eq([])
+    end
+  end
+
+  describe '.parse_price' do
+    it 'parses US format with thousands separator: 1,234.56' do
+      result = described_class.send(:parse_price, '1,234.56')
+      expect(result).to eq(1234.56)
+    end
+
+    it 'parses US format with multiple thousands separators: 12,345.67' do
+      result = described_class.send(:parse_price, '12,345.67')
+      expect(result).to eq(12345.67)
+    end
+
+    it 'parses price with multiple dots (removes all dots)' do
+      result = described_class.send(:parse_price, '1.234.56')
+      expect(result).to eq(123456.0)
+    end
+
+    it 'parses simple price without separators' do
+      result = described_class.send(:parse_price, '99.99')
+      expect(result).to eq(99.99)
+    end
+
+    it 'parses price with dollar sign' do
+      result = described_class.send(:parse_price, '$1,234.56')
+      expect(result).to eq(1234.56)
+    end
+
+    it 'returns nil for blank input' do
+      expect(described_class.send(:parse_price, '')).to be_nil
+      expect(described_class.send(:parse_price, nil)).to be_nil
+      expect(described_class.send(:parse_price, '   ')).to be_nil
+    end
+
+    it 'handles invalid price strings gracefully' do
+      result = described_class.send(:parse_price, 'invalid')
+      expect(result).to be_nil
     end
   end
 end
@@ -176,6 +267,96 @@ RSpec.describe MerchantParsers::BestBuyParser do
       result = described_class.send(:extract_line_items, doc)
       expect(result.map { |i| i[:name] }).not_to include('Item')
     end
+
+    it 'parses prices with thousands separator in line items' do
+      html = <<-HTML
+        <html>
+          <body>
+            <table>
+              <tr><td>Expensive Item</td><td>$1,234.56</td></tr>
+            </table>
+          </body>
+        </html>
+      HTML
+      doc = Nokogiri::HTML(html)
+      result = described_class.send(:extract_line_items, doc)
+      expect(result.first[:price]).to eq(1234.56)
+    end
+
+    it 'parses prices with multiple dots in line items' do
+      html = <<-HTML
+        <html>
+          <body>
+            <table>
+              <tr><td>European Price</td><td>1.234.56</td></tr>
+            </table>
+          </body>
+        </html>
+      HTML
+      doc = Nokogiri::HTML(html)
+      result = described_class.send(:extract_line_items, doc)
+      expect(result.first[:price]).to eq(123456.0)
+    end
+  end
+
+  describe '.extract_total_amount' do
+    it 'extracts total with US format thousands separator' do
+      doc = Nokogiri::HTML(html_content)
+      text = "Order Total: $1,234.56"
+      result = described_class.send(:extract_total_amount, doc, text)
+      expect(result).to eq(1234.56)
+    end
+
+    it 'extracts total with multiple dots' do
+      doc = Nokogiri::HTML(html_content)
+      text = "Total: 1.234.56"
+      result = described_class.send(:extract_total_amount, doc, text)
+      expect(result).to eq(123456.0)
+    end
+
+    it 'returns nil if no total amount is found' do
+      doc = Nokogiri::HTML(html_content)
+      result = described_class.send(:extract_total_amount, doc, "No total here.")
+      expect(result).to be_nil
+    end
+  end
+
+  describe '.parse_price' do
+    it 'parses US format with thousands separator: 1,234.56' do
+      result = described_class.send(:parse_price, '1,234.56')
+      expect(result).to eq(1234.56)
+    end
+
+    it 'parses US format with multiple thousands separators: 12,345.67' do
+      result = described_class.send(:parse_price, '12,345.67')
+      expect(result).to eq(12345.67)
+    end
+
+    it 'parses price with multiple dots (removes all dots)' do
+      result = described_class.send(:parse_price, '1.234.56')
+      expect(result).to eq(123456.0)
+    end
+
+    it 'parses simple price without separators' do
+      result = described_class.send(:parse_price, '99.99')
+      expect(result).to eq(99.99)
+    end
+
+    it 'parses price with dollar sign' do
+      result = described_class.send(:parse_price, '$1,234.56')
+      expect(result).to eq(1234.56)
+    end
+
+    it 'returns nil for blank input' do
+      expect(described_class.send(:parse_price, '')).to be_nil
+      expect(described_class.send(:parse_price, nil)).to be_nil
+      expect(described_class.send(:parse_price, '   ')).to be_nil
+    end
+
+    it 'handles invalid price strings gracefully' do
+      result = described_class.send(:parse_price, 'invalid')
+      expect(result).to be_nil
+    end
   end
 end
 
@@ -195,6 +376,15 @@ RSpec.describe MerchantParsers::GenericParser do
         order_number: '12345',
         total_amount: 49.99
       )
+    end
+
+    it 'handles the if result block when result is truthy' do
+      parser = instance_double(EmailOrderParser)
+      allow(EmailOrderParser).to receive(:new).with(html_content, text_content).and_return(parser)
+      allow(parser).to receive(:parse).and_return({ merchant: 'Generic' })
+
+      result = described_class.parse(html_content, text_content)
+      expect(result).to be_a(Hash)
     end
 
     it 'returns nil when parsing fails' do

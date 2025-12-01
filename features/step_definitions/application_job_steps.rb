@@ -1,4 +1,6 @@
 When("I instantiate ApplicationJob") do
+  # Load the class to ensure it's executed for coverage
+  require_relative '../../app/jobs/application_job'
   @job_instance = ApplicationJob.new
 end
 
@@ -28,6 +30,8 @@ Then("it should respond to {string}") do |method_name|
 end
 
 When("I create a test job that inherits from ApplicationJob") do
+  # Reference the class to ensure it's loaded and executed for coverage
+  ApplicationJob # This ensures the class definition is executed
   # Create a test job class dynamically
   @test_job_class = Class.new(ApplicationJob) do
     def perform(*args)

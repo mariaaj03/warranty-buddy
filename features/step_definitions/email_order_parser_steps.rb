@@ -307,20 +307,6 @@ When("I parse an email containing {string} for merchant extraction") do |content
   @parsed_data = @parser.parse
 end
 
-When("I parse an email with subject {string}") do |subject|
-  html_content = "<html><body><p>Your order has been processed.</p></body></html>"
-  text_content = "Your order has been processed."
-  
-  @parser = EmailOrderParser.new(
-    html_content,
-    text_content,
-    subject,
-    "orders@store.com"
-  )
-  
-  @is_order_email = @parser.is_order_email?
-  @parsed_data = @parser.parse if @is_order_email
-end
 
 When("I parse an email containing {string} with quantity") do |content|
   html_content = "<html><body><p>#{content}</p></body></html>"

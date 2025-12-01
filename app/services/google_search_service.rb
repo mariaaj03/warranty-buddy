@@ -43,11 +43,9 @@ class GoogleSearchService
         }
       end
     else
-      Rails.logger.error "Google Search API error: #{response.code} - #{response.body}"
       []
     end
   rescue => e
-    Rails.logger.error "Google Search API request failed: #{e.message}"
     []
   end
 
@@ -75,11 +73,9 @@ class GoogleSearchService
     if response.code == "200"
       JSON.parse(response.body)["items"] || []
     else
-      Rails.logger.error "Google Search API error: #{response.code} - #{response.body}"
       []
     end
   rescue => e
-    Rails.logger.error "Google Search API request failed: #{e.message}"
     []
   end
 
