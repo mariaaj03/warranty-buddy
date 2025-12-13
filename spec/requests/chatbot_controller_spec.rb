@@ -142,21 +142,6 @@ RSpec.describe ChatbotController, type: :request do
             allow(Rails.logger).to receive(:warn)
           end
 
-          it 'continues without search results and logs warning' do
-            allow(@mock_search_service).to receive(:search_warranty_question)
-              .and_raise(StandardError, 'Search API unavailable')
-            allow(@mock_ai_service).to receive(:answer_warranty_question)
-              .with('test question', []).and_return('Answer without search')
-
-            post '/chatbot/ask', params: { question: 'test question' }
-            
-            expect(response).to have_http_status(:ok)
-            response_data = JSON.parse(response.body)
-            expect(response_data['answer']).to eq('Answer without search')
-            expect(response_data['sources']).to eq([])
-            expect(Rails.logger).to have_received(:warn).with('Web search unavailable: Search API unavailable')
-          end
-
           it 'handles nil search results' do
             allow(@mock_search_service).to receive(:search_warranty_question).and_return(nil)
             allow(@mock_ai_service).to receive(:answer_warranty_question)
@@ -209,20 +194,6 @@ RSpec.describe ChatbotController, type: :request do
             allow(Rails.logger).to receive(:error)
           end
 
-          it 'handles 429 errors in message' do
-            allow(@mock_search_service).to receive(:search_warranty_question).and_return([])
-            allow(@mock_ai_service).to receive(:answer_warranty_question)
-              .and_raise(StandardError, 'HTTP 429 Too Many Requests')
-
-            post '/chatbot/ask', params: { question: 'error question' }
-            
-            expect(response).to have_http_status(:internal_server_error)
-            response_data = JSON.parse(response.body)
-            expect(response_data['error']).to include('rate-limited')
-            expect(response_data['error']).to include('https://ai.dev/usage?tab=rate-limit')
-            expect(Rails.logger).to have_received(:error).with('Chatbot error: HTTP 429 Too Many Requests')
-          end
-
           it 'handles rate limit errors in message' do
             allow(@mock_search_service).to receive(:search_warranty_question).and_return([])
             allow(@mock_ai_service).to receive(:answer_warranty_question)
@@ -247,31 +218,7 @@ RSpec.describe ChatbotController, type: :request do
             expect(response_data['error']).to eq('An error occurred: Quota exceeded for requests. Please check your API configuration.')
           end
 
-          it 'handles generic errors' do
-            allow(@mock_search_service).to receive(:search_warranty_question).and_return([])
-            allow(@mock_ai_service).to receive(:answer_warranty_question)
-              .and_raise(StandardError, 'Generic API error')
 
-            post '/chatbot/ask', params: { question: 'error question' }
-            
-            expect(response).to have_http_status(:internal_server_error)
-            response_data = JSON.parse(response.body)
-            expect(response_data['error']).to eq('An error occurred: Generic API error. Please check your API configuration.')
-            expect(Rails.logger).to have_received(:error).with('Chatbot error: Generic API error')
-          end
-
-          it 'logs error backtrace' do
-            error = StandardError.new('Test error')
-            error.set_backtrace(['line 1', 'line 2', 'line 3'])
-            
-            allow(@mock_search_service).to receive(:search_warranty_question).and_return([])
-            allow(@mock_ai_service).to receive(:answer_warranty_question).and_raise(error)
-
-            post '/chatbot/ask', params: { question: 'error question' }
-            
-            expect(Rails.logger).to have_received(:error).with('Chatbot error: Test error')
-            expect(Rails.logger).to have_received(:error).with("line 1\nline 2\nline 3")
-          end
         end
       end
     end

@@ -204,5 +204,299 @@ RSpec.describe ReceiptProcessor do
       expect(rp.send(:parse_price, "9.999.999,99")).to eq(9_999_999.99)
       expect(rp.send(:parse_price, nil)).to be_nil
     end
+
+    describe '#extract_date_from_receipt' do
+      it "extracts warranty end date and calculates purchase date" do
+        text = <<~TXT
+          Product: Laptop
+          Coverage End Date: March 15, 2026
+          Warranty Period: 24 months
+        TXT
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2024, 3, 15))
+      end
+
+      it "handles warranty until format" do
+        text = "Warranty valid until: January 1, 2027\n24 months warranty"
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2025, 1, 1))
+      end
+
+      it "defaults to 12 months when warranty period not found" do
+        text = "Coverage End Date: December 31, 2025"
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2024, 12, 31))
+      end
+
+      it "handles year warranty format" do
+        text = "Expires on: June 30, 2026\n2 year warranty"
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2024, 6, 30))
+      end
+
+      it "extracts purchase date when no warranty date found" do
+        text = "Date of purchase: 05/15/2024\nProduct: Item"
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2024, 5, 15))
+      end
+
+      it "strips time from date strings" do
+        text = "Date of purchase: March 15, 2024 14:30:00"
+        result = rp.send(:extract_date_from_receipt, text)
+        expect(result).to eq(Date.new(2024, 3, 15))
+      end
+
+      it "returns nil for invalid dates" do
+        expect(rp.send(:extract_date_from_receipt, "No date here")).to be_nil
+        expect(rp.send(:extract_date_from_receipt, "")).to be_nil
+      end
+    end
+
+    describe '#extract_merchant_from_receipt' do
+
+      it "handles case insensitive matching" do
+        expect(rp.send(:extract_merchant_from_receipt, "target store")).to eq("Target")
+      end
+
+      it "returns nil when no merchant found" do
+        expect(rp.send(:extract_merchant_from_receipt, "Some random store")).to be_nil
+      end
+    end
+
+    describe '#extract_items_from_receipt' do
+      it "extracts items with Part Number and price format" do
+        text = <<~TXT
+          Store Receipt
+          Product Name Here
+          Part Number: ABC123
+          Some other text
+          $49.99
+        TXT
+        items = rp.send(:extract_items_from_receipt, text)
+        expect(items.length).to eq(1)
+        expect(items.first[:name]).to eq("Product Name Here")
+        expect(items.first[:price]).to eq(49.99)
+      end
+
+      it "looks back up to 8 lines for product name" do
+        text = <<~TXT
+          Amazing Product Name
+          Line 1
+          Line 2
+          Line 3
+          Line 4
+          Line 5
+          Line 6
+          $99.99
+        TXT
+        items = rp.send(:extract_items_from_receipt, text)
+        expect(items.first[:name]).to eq("Amazing Product Name")
+      end
+
+      it "filters out invalid product names" do
+        text = <<~TXT
+          receipt
+          $10.00
+          customer service
+          $20.00
+          Valid Product Name
+          $30.00
+        TXT
+        items = rp.send(:extract_items_from_receipt, text)
+        expect(items.length).to eq(1)
+        expect(items.first[:name]).to eq("Valid Product Name")
+      end
+
+      it "limits to first 5 items" do
+        text = (1..10).map { |i| "Product #{i}\n$#{i}.99" }.join("\n")
+        items = rp.send(:extract_items_from_receipt, text)
+        expect(items.length).to be <= 5
+      end
+
+
+      it "filters out email addresses" do
+        text = "test@example.com\n$10.00\nProduct Name\n$20.00"
+        items = rp.send(:extract_items_from_receipt, text)
+        expect(items.first[:name]).to eq("Product Name")
+      end
+    end
+
+    describe '#extract_total_from_receipt' do
+      it "extracts total with various formats" do
+        expect(rp.send(:extract_total_from_receipt, "Total: $99.99")).to eq(99.99)
+        expect(rp.send(:extract_total_from_receipt, "Grand Total: 199.99")).to eq(199.99)
+        expect(rp.send(:extract_total_from_receipt, "Amount Due: $49.99")).to eq(49.99)
+        expect(rp.send(:extract_total_from_receipt, "Subtotal: $29.99")).to eq(29.99)
+      end
+
+      it "returns nil when no total found" do
+        expect(rp.send(:extract_total_from_receipt, "No total here")).to be_nil
+      end
+    end
+
+    describe '#extract_order_number_from_receipt' do
+      it "extracts order numbers with various formats" do
+        expect(rp.send(:extract_order_number_from_receipt, "Order Number: ABC-123456")).to eq("ABC-123456")
+        expect(rp.send(:extract_order_number_from_receipt, "Order #: XYZ789")).to eq("XYZ789")
+        expect(rp.send(:extract_order_number_from_receipt, "Receipt Number: 123-ABC-456")).to eq("123-ABC-456")
+        expect(rp.send(:extract_order_number_from_receipt, "Transaction ID: TXN123456789")).to eq("TXN123456789")
+      end
+
+      it "returns nil when no order number found" do
+        expect(rp.send(:extract_order_number_from_receipt, "No order here")).to be_nil
+      end
+    end
+
+    describe '#parse_price' do
+      it "handles only period as thousands separator" do
+        expect(rp.send(:parse_price, "1.234")).to eq(1234.0)
+        expect(rp.send(:parse_price, "1.234.567")).to eq(1234567.0)
+      end
+
+      it "handles only period as decimal" do
+        expect(rp.send(:parse_price, "12.99")).to eq(12.99)
+      end
+
+      it "handles only comma as thousands separator" do
+        expect(rp.send(:parse_price, "1,234")).to eq(1234.0)
+      end
+
+      it "handles blank input" do
+        expect(rp.send(:parse_price, "")).to be_nil
+        expect(rp.send(:parse_price, "   ")).to be_nil
+      end
+
+      it "handles currency symbols" do
+        expect(rp.send(:parse_price, "$99.99")).to eq(99.99)
+        expect(rp.send(:parse_price, "€49,99")).to eq(49.99)
+      end
+
+      it "rescues errors gracefully" do
+        allow_any_instance_of(String).to receive(:to_f).and_raise(StandardError)
+        expect(rp.send(:parse_price, "99.99")).to be_nil
+      end
+    end
+
+    describe '#is_valid_product_name' do
+      it "filters all invalid terms" do
+        invalid = %w[
+          warranty months support returns exchange refund policy
+          terms conditions invoice confirmation total tax shipping
+          discount www.example.com http://test.com
+        ]
+        invalid.each do |term|
+          expect(rp.send(:is_valid_product_name, term)).to be false
+        end
+      end
+
+      it "rejects names shorter than 3 characters" do
+        expect(rp.send(:is_valid_product_name, "AB")).to be false
+      end
+
+    end
+
+    describe '#determine_image_extension' do
+      it "returns extension from filename" do
+        expect(rp.send(:determine_image_extension, "photo.jpg")).to eq(".jpg")
+        expect(rp.send(:determine_image_extension, "image.png")).to eq(".png")
+        expect(rp.send(:determine_image_extension, "pic.JPEG")).to eq(".jpeg")
+      end
+
+      it "returns .jpg for unknown extensions" do
+        expect(rp.send(:determine_image_extension, "file.txt")).to eq(".jpg")
+      end
+
+      it "returns nil for blank filename" do
+        expect(rp.send(:determine_image_extension, nil)).to be_nil
+        expect(rp.send(:determine_image_extension, "")).to be_nil
+      end
+    end
+
+    describe '#parse_receipt_text_first' do
+      it "returns nil for blank text" do
+        expect(rp.send(:parse_receipt_text_first, "")).to be_nil
+        expect(rp.send(:parse_receipt_text_first, nil)).to be_nil
+      end
+
+      it "uses regex result when line items found" do
+        text = "Target\nDate: 2024-01-01\nPart Number: ABC\nProduct Name\n$10.00\nTotal: $10.00"
+        allow(ai).to receive(:extract_receipt_info).and_return({ "is_receipt" => false })
+        
+        result = rp.send(:parse_receipt_text_first, text)
+        expect(result[:product_name]).to eq("Product Name")
+        expect(result[:merchant]).to eq("Target")
+      end
+
+      it "uses AI when regex has no items" do
+        text = "Some text without products\nTotal: $10.00"
+        allow(ai).to receive(:extract_receipt_info).and_return({
+          "is_receipt" => true,
+          "product_name" => "AI Product",
+          "merchant" => "AI Store",
+          "purchase_date" => "2024-01-01"
+        })
+        
+        result = rp.send(:parse_receipt_text_first, text)
+        expect(result[:product_name]).to eq("AI Product")
+      end
+
+      it "rescues AI errors and returns regex result" do
+        text = "Target\nDate: 2024-01-01\nTotal: $10.00"
+        allow(ai).to receive(:extract_receipt_info).and_raise(StandardError)
+        
+        result = rp.send(:parse_receipt_text_first, text)
+        expect(result[:merchant]).to eq("Target")
+      end
+    end
+
+    describe '#format_ai_result' do
+      it "formats AI result with all fields" do
+        ai_data = {
+          "product_name" => "Test Product",
+          "merchant" => "Test Store",
+          "purchase_date" => "2024-01-15",
+          "warranty_length_months" => 24,
+          "warranty_type" => "extended",
+          "return_policy_days" => 60,
+          "return_deadline" => "2024-03-15"
+        }
+        
+        result = rp.send(:format_ai_result, ai_data)
+        expect(result[:product_name]).to eq("Test Product")
+        expect(result[:merchant]).to eq("Test Store")
+        expect(result[:warranty_length_months]).to eq(24)
+        expect(result[:warranty_type]).to eq("extended")
+        expect(result[:return_policy_days]).to eq(60)
+        expect(result[:line_items].first[:name]).to eq("Test Product")
+      end
+    end
+  end
+
+  describe "integration scenarios" do
+    it "handles AI failure gracefully in process_image" do
+      rp = described_class.new(user)
+      text = "Best Buy\nDate: 2024-01-01\nProduct ABC\n$99.99"
+      
+      allow(vision).to receive(:extract_text_from_image).and_return(text)
+      allow(ai).to receive(:extract_receipt_info_from_image).and_raise(StandardError)
+      
+      result = rp.process_image("IMG", "test.jpg")
+      expect(result).not_to be_nil
+    end
+
+    it "prefers longer regex product name over shorter AI name" do
+      rp = described_class.new(user)
+      
+      text = "Amazon\nPart Number: ABC\nSuper Ultra Mega Product 3000 Pro\n$199.99"
+      allow(vision).to receive(:extract_text_from_image).and_return(text)
+      allow(ai).to receive(:extract_receipt_info_from_image).and_return({
+        "is_receipt" => true,
+        "product_name" => "Product",
+        "merchant" => "Amazon"
+      })
+      
+      result = rp.process_image("IMG", "test.jpg")
+      expect(result[:product_name]).to include("Super Ultra Mega")
+    end
   end
 end
