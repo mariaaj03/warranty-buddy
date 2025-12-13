@@ -31,7 +31,7 @@ RSpec.describe "dashboard/index", type: :view do
   it "displays the dashboard header with logo" do
     render
     expect(rendered).to have_selector('.logo', text: "Warranty Buddy")
-    expect(rendered).to have_selector('.logo-icon', text: "🧾")
+    expect(rendered).to have_selector('.logo-icon svg')
   end
 
   it "shows user information in header" do

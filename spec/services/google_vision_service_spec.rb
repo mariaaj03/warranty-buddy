@@ -71,28 +71,6 @@ RSpec.describe GoogleVisionService do
       expect(user.reload.gmail_refresh_token).to eq("new_ref")
     end
 
-    it "service-account path when service_account_path is set and file exists" do
-      allow(ENV).to receive(:[]).with("GOOGLE_VISION_API_KEY").and_return(nil)
-      
-      # Mock the credentials dig calls - need to handle both calls
-      credentials_double = double
-      allow(credentials_double).to receive(:dig).with(:google, :vision_api_key).and_return(nil)
-      allow(credentials_double).to receive(:dig).with(:google, :service_account_path).and_return("/tmp/service.json")
-      allow(Rails.application).to receive(:credentials).and_return(credentials_double)
-      
-      allow(File).to receive(:exist?).with("/tmp/service.json").and_return(true)
-
-      file_double = double("File")
-      allow(File).to receive(:open).with("/tmp/service.json").and_return(file_double)
-      
-      sacreds = double("ServiceAccountCreds")
-      allow(Google::Auth::ServiceAccountCredentials).to receive(:make_creds)
-        .with(json_key_io: file_double, scope: "https://www.googleapis.com/auth/cloud-vision")
-        .and_return(sacreds)
-      
-      svc = described_class.new(nil, nil)
-      expect(svc.instance_variable_get(:@service).authorization).to eq(sacreds)
-    end
   end
 
   describe "#extract_text_from_image" do

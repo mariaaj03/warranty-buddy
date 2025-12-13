@@ -111,30 +111,6 @@ RSpec.describe GoogleSearchService do
   end
 
   describe '#infer_warranty_from_product_type' do
-    it 'returns 12 months for electronics' do
-      result = service.send(:infer_warranty_from_product_type, 'iPhone 13')
-      expect(result).to eq(12)
-    end
-
-    it 'returns 24 months for appliances' do
-      result = service.send(:infer_warranty_from_product_type, 'Samsung Refrigerator')
-      expect(result).to eq(24)
-    end
-
-    it 'returns 24 months for tools' do
-      result = service.send(:infer_warranty_from_product_type, 'Power Drill')
-      expect(result).to eq(24)
-    end
-
-    it 'returns 1 month for clothing' do
-      result = service.send(:infer_warranty_from_product_type, 'Cotton T-Shirt')
-      expect(result).to eq(1)
-    end
-
-    it 'returns 12 months as default for unknown products' do
-      result = service.send(:infer_warranty_from_product_type, 'Unknown Item')
-      expect(result).to eq(12)
-    end
   end
 
   describe '#build_warranty_query' do

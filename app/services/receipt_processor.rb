@@ -533,10 +533,43 @@ class ReceiptProcessor
     cleaned = price_string.gsub(/[^\d\.,]/, "")
     return nil if cleaned.blank?
 
-    # Handle US format with thousands separator
-    if cleaned.match(/^\d{1,3}(\,\d{3})+\.\d{2}$/)
-      # Format: 1,234.56 (US format with thousands separator)
-      cleaned = cleaned.gsub(",", "")
+    # Determine format based on position of comma and period
+    has_comma = cleaned.include?(',')
+    has_period = cleaned.include?('.')
+    
+    if has_comma && has_period
+      # Both present - check which comes last
+      last_comma = cleaned.rindex(',')
+      last_period = cleaned.rindex('.')
+      
+      if last_comma > last_period
+        # EU format: 1.234,56 or 9.999.999,99
+        cleaned = cleaned.gsub('.', '').gsub(',', '.')
+      else
+        # US format: 1,234.56
+        cleaned = cleaned.gsub(',', '')
+      end
+    elsif has_comma && !has_period
+      # Only comma present
+      # Check if it's a thousands separator (US: 1,234) or decimal (EU: 123,45)
+      parts = cleaned.split(',')
+      if parts.length == 2 && parts[1].length == 2
+        # Likely EU decimal: 123,45
+        cleaned = cleaned.gsub(',', '.')
+      else
+        # Likely US thousands separator: 1,234 or 1,234,567
+        cleaned = cleaned.gsub(',', '')
+      end
+    elsif has_period && !has_comma
+      # Only period - could be US thousands (1.234) or decimal (1.23)
+      parts = cleaned.split('.')
+      if parts.length == 2 && parts[1].length == 2
+        # Likely decimal: 1.23
+        # Already correct format
+      elsif parts.length > 2 || (parts.length == 2 && parts[1].length == 3)
+        # Likely EU thousands separator: 1.234 or 1.234.567
+        cleaned = cleaned.gsub('.', '')
+      end
     end
 
     cleaned.to_f
