@@ -225,3 +225,32 @@ Feature: Receipt Processor
   Scenario: System creates temp file with extension
     When I create temp file with data and extension
     Then it should create and track temp file
+
+
+  Scenario: System handles EU price format with period thousands separator
+    When I parse price string "1.234,56"
+    Then the parsed price should be 1234.56
+
+  Scenario: System handles price with only comma as decimal separator
+    When I parse price string "123,45"
+    Then the parsed price should be 123.45
+
+  Scenario: System handles price with only period as thousands separator
+    When I parse price string "1.234"
+    Then the parsed price should be 1234.0
+
+
+
+  Scenario: System extracts merchant from Ulta email
+    When I extract merchant from text "ULTA Beauty"
+    Then the merchant should be extracted from receipt as "Ulta"
+
+
+
+
+  Scenario: System handles warranty end date with 1 year warranty
+    When I extract date from receipt with "Expires: Dec 31, 2025" and "1 year warranty"
+    Then the purchase date should be calculated as "2024-12-31"
+
+
+
