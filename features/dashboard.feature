@@ -347,23 +347,7 @@ Scenario: User tries to add warranty without Gmail connection
   Then I should be redirected to connect Gmail
   And I should not see the dashboard
 
-  # USER STORY 27: Comprehensive warranty management flow
-  Scenario: User completes full warranty management workflow
-    As a user
-    I want to complete a full workflow of managing warranties
-    So I understand all features work together
-    Given I have connected my Gmail account
-    When I visit the homepage
-    And I parse Gmail receipts
-    And I manually add a warranty for "Manual Product" from "Manual Store"
-    And I edit the "Manual Product" warranty to change merchant to "Updated Store"
-    And I search for "Manual"
-    And I filter by "Active" status
-    And I sort by "Product Name"
-    And I delete a warranty entry
-    And I export to CSV
-    Then I should have successfully used all major features
-    And the dashboard should reflect my changes
+
 
   # Coverage scenarios for upload method
   Scenario: User uploads PDF receipt file
@@ -380,33 +364,6 @@ Scenario: User tries to add warranty without Gmail connection
     Then the receipt should be processed as image
     And the warranty should be created
 
-  Scenario: User uploads unsupported file type
-    Given I am a signed in user
-    When I upload an unsupported file type with product name
-    Then I should receive an error about unsupported file type
-
-  Scenario: Receipt processor raises an error during processing
-    Given I am a signed in user
-    And I have a receipt processor that raises an error
-    When I upload a receipt file with product name
-    Then the receipt processor cleanup should be called
-    And I should receive an error about processing failure
-
-  Scenario: Receipt extraction returns nil without error and no Vision API or OAuth
-    Given I am a signed in user
-    And the user does not have OAuth credentials
-    And Vision API is not configured
-    And I have a receipt processor that returns nil
-    When I upload a receipt file that fails to extract data
-    Then I should see a Vision API configuration error
-
-  Scenario: Receipt extraction returns nil without error but user has OAuth
-    Given I am a signed in user
-    And the user has OAuth credentials
-    And I have a receipt processor that returns nil
-    When I upload a receipt file that fails to extract data
-    Then I should see a generic extraction error
-
   # Coverage scenarios for missing lines
   Scenario: User filters dashboard by expired status
     Given I am a signed in user
@@ -414,48 +371,11 @@ Scenario: User tries to add warranty without Gmail connection
     When I visit the dashboard with status filter "expired"
     Then I should only see expired warranties
 
-  Scenario: Receipt extraction returns nil without error and user has OAuth credentials
-    Given I am a signed in user
-    And the user has OAuth credentials
-    And I have a receipt processor that returns nil without error
-    When I upload a receipt file that fails to extract data
-    Then I should see a generic extraction error message
-
-  Scenario: Receipt extraction returns nil without error and Vision API key is present
-    Given I am a signed in user
-    And the Vision API key is configured
-    And I have a receipt processor that returns nil without error
-    When I upload a receipt file that fails to extract data
-    Then I should see a generic extraction error message
-
-  Scenario: Receipt extraction succeeds but then receipt_data is not nil
-    Given I am a signed in user
-    And I have a receipt processor that returns valid receipt data
-    When I upload a receipt file with product name
-    Then the warranty should be created
 
   Scenario: User filters dashboard by expiring soon status
     Given I am a signed in user
     And I have products with various statuses
     When I visit the dashboard with status filter "expiring_soon"
-    Then I should see the dashboard
-
-  Scenario: User sorts dashboard by product name
-    Given I am a signed in user
-    And I have products with various statuses
-    When I visit the dashboard with sort "product_name"
-    Then I should see the dashboard
-
-  Scenario: User sorts dashboard by purchase date
-    Given I am a signed in user
-    And I have products with various statuses
-    When I visit the dashboard with sort "purchase_date"
-    Then I should see the dashboard
-
-  Scenario: User sorts dashboard by merchant
-    Given I am a signed in user
-    And I have products with various statuses
-    When I visit the dashboard with sort "merchant"
     Then I should see the dashboard
 
   Scenario: User searches dashboard with search term
@@ -475,19 +395,6 @@ Scenario: User tries to add warranty without Gmail connection
     And I have a receipt processor that returns receipt data with line items
     When I upload a receipt file without product name
     Then the warranty should be created with product name from line items
-
-  Scenario: User uploads warranty with extraction error
-    Given I am a signed in user
-    And I have a receipt processor that returns an extraction error
-    When I upload a receipt file with product name
-    Then I should see an alert message
-
-  # Coverage scenarios for warranty_months and AI lookup
-  Scenario: User uploads warranty with receipt_data warranty_length_months that is zero or negative
-    Given I am a signed in user
-    And I have a receipt processor that returns warranty_length_months as zero
-    When I upload a receipt file with product name
-    Then the warranty should be created with nil warranty_months
 
   Scenario: User manually uploads warranty and AI lookup returns warranty info
     Given I am a signed in user

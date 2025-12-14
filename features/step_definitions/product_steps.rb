@@ -135,10 +135,6 @@ Then("it should return a date {int} months after purchase date") do |months|
   expect(@expiry_date).to eq(expected_date)
 end
 
-Then("it should return nil") do
-  expect(@expiry_date).to be_nil
-end
-
 Then("the expiry date should be nil") do
   expect(@expiry_date).to be_nil
 end

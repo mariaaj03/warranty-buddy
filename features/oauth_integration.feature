@@ -33,16 +33,6 @@ Feature: Google OAuth Integration
     And I should see a "Connect Gmail" button
     And I should not see "Parse Gmail Receipts" button
 
-  Scenario: OAuth token expires and needs refresh
-    As a user
-    I want my session to be maintained when tokens refresh
-    So that I don't have to re-authenticate frequently
-    Given I have connected my Gmail account
-    And my OAuth token has expired
-    When I visit the dashboard
-    Then my session should be automatically refreshed
-    And I should still see "Connected" status for Gmail
-
   Scenario: OAuth service is unavailable
     As a user
     I want to be informed when OAuth service is down

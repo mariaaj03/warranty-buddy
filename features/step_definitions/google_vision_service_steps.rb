@@ -202,10 +202,6 @@ Then("it should return extracted text") do
   expect(@result).not_to be_empty
 end
 
-Then("it should return nil") do
-  expect(@result).to be_nil
-end
-
 Given("the PDF::Reader gem is available") do
   # PDF::Reader is available by default in tests
 end

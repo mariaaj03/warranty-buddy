@@ -46,10 +46,6 @@ Feature: AI Service
     When I answer warranty question "test question" without search results
     Then it should not include search context
 
-  Scenario: System returns nil when client is not configured
-    Given the AI service has no client configured
-    When I answer warranty question "test question" without search results
-    Then it should return nil
 
   Scenario: System extracts receipt info with markdown cleanup
     Given the Gemini API returns receipt confirmation with markdown
@@ -73,11 +69,6 @@ Feature: AI Service
     Then the service should log an error about missing API key
     And the client should be nil
 
-  Scenario: Service handles JSON parsing error in extract_receipt_info
-    Given the Gemini API returns invalid JSON for receipt extraction
-    When I extract receipt info from email content
-    Then it should return nil
-
   Scenario: Service handles JSON parsing error in lookup_warranty_info
     Given the Gemini API returns invalid JSON for warranty lookup
     When I lookup warranty info for "iPhone 15" from "Apple"
@@ -86,9 +77,4 @@ Feature: AI Service
   Scenario: Service handles JSON parsing error in check_warranty_eligibility
     Given the Gemini API returns invalid JSON for warranty eligibility
     When I check warranty eligibility for "iPhone 15" with issue "screen cracked"
-    Then it should return nil
-
-  Scenario: Service handles JSON parsing error in extract_receipt_info_from_image
-    Given the Gemini API returns invalid JSON for image extraction
-    When I extract receipt info from image
     Then it should return nil

@@ -189,9 +189,6 @@ Then("it should return the response text") do
   expect(@result).to eq("Test response text")
 end
 
-Then("it should return an empty string") do
-  expect(@result).to eq("")
-end
 
 Then("it should parse the JSON response") do
   expect(@result).to be_a(String)
@@ -292,9 +289,6 @@ Then("it should return {float} seconds") do |expected_seconds|
   expect(@retry_delay).to eq(expected_seconds)
 end
 
-Then("it should return nil") do
-  expect(@retry_delay).to be_nil
-end
 
 Given("I have search results") do
   @search_results = [
@@ -399,7 +393,6 @@ Given("the Gemini API returns receipt confirmation") do
 end
 
 Given("the Gemini API returns receipt confirmation with markdown") do
-  # Ensure API key is configured before creating service
   allow(Rails.application.credentials).to receive(:dig).with(:google, :gemini_api_key).and_return("test_api_key")
   allow(ENV).to receive(:[]).and_call_original
   allow(ENV).to receive(:[]).with("GOOGLE_GEMINI_API_KEY").and_return(nil)
@@ -414,14 +407,15 @@ Given("the Gemini API returns receipt confirmation with markdown") do
     candidates: [{
       content: {
         parts: [{
-          text: '```json\n{"is_receipt": true, "product_name": "iPhone 15 Pro", "merchant": "Apple", "purchase_date": "2024-01-15"}\n```'
+          text: '```json
+{"is_receipt": true, "product_name": "iPhone 15 Pro", "merchant": "Apple", "purchase_date": "2024-01-15", "total_amount": 999.99}
+```'
         }]
       }
     }]
   }.to_json)
   allow(@mock_http).to receive(:request).and_return(@mock_response)
   
-  # Create service after mocks are set up
   @ai_service = AiService.new
 end
 
@@ -472,7 +466,7 @@ Given("the AI service has no client configured") do
   @ai_service = AiService.new
 end
 
-Then("it should return nil") do
+Then('it should return nil') do
   expect(@result).to be_nil
 end
 

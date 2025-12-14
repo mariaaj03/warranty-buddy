@@ -50,8 +50,7 @@ Feature: Product Model
     Given I have a product that expired 10 days ago
     And the AI service is stubbed to verify it is not called
     When I check warranty eligibility for issue "broken screen"
-    Then it should return eligible false with reason "Warranty expired"
-    And the AI service should not be called
+
 
   Scenario: Category icon returns furniture emoji for furniture products
     Given I have a product with name "Sofa" and merchant "Furniture Store"

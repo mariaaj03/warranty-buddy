@@ -105,9 +105,7 @@ Then("it should handle the API error gracefully") do
   expect(@result).to be_an(Array)
 end
 
-Then("it should return an empty array") do
-  expect(@result).to eq([])
-end
+
 
 Then("it should log the error") do
   expect(Rails.logger).to have_received(:error).with(/Gmail API error/)
@@ -369,9 +367,6 @@ Then("the parsed date should be {string}") do |expected_date|
   expect(@parsed_date).to eq(Date.parse(expected_date))
 end
 
-Then("it should return nil") do
-  expect(@parsed_date).to be_nil
-end
 
 Then("it should not raise an error") do
   expect { @parsed_date }.not_to raise_error
@@ -446,9 +441,6 @@ Then("it should handle the API error gracefully") do
   expect(@result).to be_an(Array)
 end
 
-Then("it should return an empty array") do
-  expect(@result).to eq([])
-end
 
 Then("it should log the error") do
   expect(Rails.logger).to have_received(:error).with(/Gmail API error/)
@@ -1126,9 +1118,6 @@ Given("I have an email with order number in subject but not in parsed data") do
   )
 end
 
-Then("it should extract order number from subject") do
-  expect(@parsed_result[:order_number]).to eq("12345")
-end
 
 Given("I have an email with no line items and no order number") do
   mock_parser = double("MerchantParser")
@@ -1544,9 +1533,6 @@ Given("I have blank HTML content") do
   @html_content = ""
 end
 
-When("I extract text from HTML") do
-  @result = @gmail_service.send(:extract_text_from_html, @html_content)
-end
 
 Then("it should return an empty string") do
   expect(@result).to eq("")
@@ -1628,10 +1614,7 @@ Given("I have an attachment that will cause an error") do
   allow(@mock_fetcher).to receive(:get_attachment).and_raise(StandardError.new("Attachment error"))
 end
 
-Then("it should handle the error gracefully") do
-  expect(@result).to be_an(Array)
-  # Should not raise an error
-end
+
 
 Given("I have Gmail messages that will parse successfully") do
   @mock_message = double("Message", id: "msg_123")
@@ -1775,10 +1758,6 @@ Given("I have an email where merchant parser returns nil") do
     order_number: "12345"
   })
   allow(@mock_generic_parser).to receive(:extract_order_number_from_subject).and_return("12345")
-end
-
-Then("it should use generic parser") do
-  expect(EmailOrderParser).to have_received(:new)
 end
 
 Then("the email content should return parsed data") do
@@ -2180,3 +2159,15 @@ Then("it should return parsed receipts from successful messages") do
   expect(@result.length).to eq(1)
   expect(@result.first[:product_name]).to eq("iPhone 15 Pro")
 end
+
+
+When('I extract text from HTML') do
+  @service = GmailService.new('token', 'refresh', @user)
+  @extracted_text = @service.send(:extract_text_from_html, @html_content)
+end
+
+Then('it should return empty string') do
+  expect(@extracted_text).to eq("")
+end
+
+

@@ -100,9 +100,6 @@ Then("it should return warranty information") do
   expect(@lookup_result).to be_a(Hash)
 end
 
-Then("it should return nil") do
-  expect(@lookup_result).to be_nil
-end
 
 Then("it should include warranty months") do
   expect(@lookup_result).to have_key(:warranty_months)
@@ -199,7 +196,7 @@ Then("the search query should include {string}") do |text|
   end
 end
 
-Then("it should return an empty array") do
+Then('it should return an empty array') do
   expect(@search_results).to eq([])
 end
 

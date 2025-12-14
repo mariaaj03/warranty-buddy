@@ -151,9 +151,6 @@ Then("it should return the HTML content") do
   expect(@result).to include("<html>")
 end
 
-Then("it should return an empty string") do
-  expect(@result).to eq("")
-end
 
 Then("the HTML extraction should return an empty string") do
   expect(@result).to eq("")
@@ -254,9 +251,7 @@ Then("it should return all attachments") do
   expect(@result.length).to be > 0
 end
 
-Then("it should return an empty array") do
-  expect(@result).to eq([])
-end
+
 
 Then("the Gmail fetcher should return an empty array") do
   expect(@result).to eq([])
@@ -284,10 +279,7 @@ Then("it should return decoded content") do
   expect(@result).to include("Test")
 end
 
-Then("it should handle the error gracefully") do
-  # Should not raise an error, should return decoded content or handle gracefully
-  expect(@result).to be_a(String)
-end
+
 
 Given("the Gmail API returns paginated messages") do
   @mock_service = double("GmailService")
