@@ -134,6 +134,10 @@ Then("the merchant should be extracted from receipt as {string}") do |expected_m
   expect(@extracted_merchant).to eq(expected_merchant)
 end
 
+Then('the parsed price should be {float}') do |expected_price|
+  expect(@parsed_price).to eq(expected_price)
+end
+
 Then("the merchant from receipt should be nil") do
   expect(@extracted_merchant).to be_nil
 end

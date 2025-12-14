@@ -39,6 +39,8 @@ Feature: Products Controller
     When I export warranties to Google Calendar
     Then I should be redirected to dashboard
 
+
+
   Scenario: User exports to iCal with reminders as non-array parameter
     Given I have products with warranty expirations
     When I visit the calendar export URL with reminders as non-array "7,30"
