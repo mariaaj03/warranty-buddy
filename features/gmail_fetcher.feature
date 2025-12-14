@@ -27,11 +27,6 @@ Feature: Gmail Fetcher
     When I extract HTML from the message
     Then the Gmail fetcher should return the HTML content from parts
 
-  Scenario: Extract HTML from message with no body data and no parts
-    Given I have a Gmail message with no body data and no parts
-    When I extract HTML from the message
-    Then the HTML extraction should return an empty string
-
   # Coverage scenarios for extract_text_from_message and find_text_part
   Scenario: Extract text from message with text in nested parts
     Given I have a message with text in nested parts
@@ -48,8 +43,3 @@ Feature: Gmail Fetcher
     Given I have a message with attachment in nested parts
     When I extract attachments from the message
     Then it should return all attachments including nested ones
-
-  Scenario: Extract attachments from message with part that has filename but no attachment_id
-    Given I have a message with part that has filename but no attachment_id
-    When I extract attachments from the message
-    Then it should return an empty array

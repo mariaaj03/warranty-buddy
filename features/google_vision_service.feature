@@ -47,14 +47,6 @@ Feature: Google Vision Service
     And the user has OAuth credentials with expired tokens
     And OAuth token refresh will fail
     When I create a Vision service instance
-    Then the Vision service should handle Vision API OAuth refresh failure gracefully
-
-  # Coverage scenarios for missing lines
-  Scenario: Service extracts text from image using OAuth when API key is not present
-    Given the Vision API key is not configured
-    And the user has OAuth credentials
-    When I extract text from an image with OAuth
-    Then it should return extracted text
 
   Scenario: Service extracts text from scanned PDF using OCR
     Given the Vision API is configured

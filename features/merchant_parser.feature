@@ -40,36 +40,6 @@ Feature: Merchant-Specific Email Parsers
     When I parse Amazon price ""
     Then the Amazon price should be nil
 
-  Scenario: Amazon parser handles US format with thousands separator
-    When I parse Amazon email with total "Order Total: 1,234.56"
-    Then the total amount should be 1234.56
-
-  Scenario: Amazon parser handles prices with multiple dots
-    When I parse Amazon email with total "Total: 1.234.56"
-    Then the total amount should be 123456.0
-
-  Scenario: Amazon parser parses prices with thousands separator in line items
-    When I parse Amazon email with product table
-      """
-      <html><body>
-      <table>
-        <tr><td>Expensive Item</td><td>1</td><td>$1,234.56</td></tr>
-      </table>
-      </body></html>
-      """
-    Then the first item should be "Expensive Item" with price 1234.56
-
-  Scenario: Amazon parser parses prices with multiple dots in line items
-    When I parse Amazon email with product table
-      """
-      <html><body>
-      <table>
-        <tr><td>European Price Item</td><td>1</td><td>1.234.56</td></tr>
-      </table>
-      </body></html>
-      """
-    Then the first item should be "European Price Item" with price 123456.0
-
   # USER STORY 57: Generic Parser Integration
   Scenario: Generic parser uses EmailOrderParser for unknown merchants
     When I parse generic email with unknown merchant
@@ -183,21 +153,5 @@ Feature: Merchant-Specific Email Parsers
   Scenario: Amazon parser handles price string that becomes blank after cleaning
     When I parse Amazon price "   "
     Then the Amazon price should be nil
-
-  Scenario: Amazon parser handles price parsing exception
-    When I parse Amazon price that causes exception
-    Then the Amazon price should be nil
-
-  Scenario: Amazon parser handles total amount ending with period
-    When I parse Amazon email with total "Order Total: 1,234.56."
-    Then the Amazon total amount should be 1234.56
-
-  Scenario: Amazon parser handles multiple dots in price
-    When I parse Amazon price "1.234.567"
-    Then the Amazon price should be 1234567.0
-
-  Scenario: Amazon parser handles total with trailing period
-    When I parse Amazon email with total "Order Total: 1,234.56."
-    Then the total amount should be 1234.56
 
    

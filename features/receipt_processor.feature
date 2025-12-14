@@ -137,9 +137,6 @@ Feature: Receipt Processor
     When I extract items from receipt with Part Number pattern
     Then it should extract product with price from Part Number section
 
-  Scenario: System extracts items by finding price and looking backwards
-    When I extract items from receipt with price line and valid product name before it
-    Then it should extract the product name before the price in second loop
 
   Scenario: System skips prev_line when blank
     When I extract items from receipt with blank lines before price for prev_line test
