@@ -168,10 +168,25 @@ bundle exec cucumber
 open coverage/cucumber/index.html
 ```
 
-## Viewing the Deployed App
+## User Stories and Test Coverage
 
+- All core product features are specified as user stories written in Cucumber.
+- All user stories pass successfully using `bundle exec cucumber`.
+- Application logic and models/controllers are covered with RSpec tests.
+- Test coverage is measured using SimpleCov.
+
+Current coverage:
+- RSpec: ~85.9% line coverage
+- Cucumber: Covers all primary user workflows
+
+
+## Viewing the Deployed App
 The app is deployed on Heroku and can be accessed at:
 **https://safe-reef-46455-4dc844325c04.herokuapp.com**
+
+## GitHub Repository
+Source code for the project is available at:
+**https://github.com/mariaaj03/warranty-buddy**
 
 ## Troubleshooting
 
@@ -191,6 +206,11 @@ brew services start postgresql@14  # macOS
 **API key errors?**
 - Check keys in `rails credentials:show`
 - Restart server after changes
+
+## Additional Materials
+
+- Sample receipt images used for testing are included above.
+- iCal and CSV export functionality can be verified directly in the deployed app.
 
 ## Receipts
 Here are some receipts you can manually upload.
